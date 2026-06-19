@@ -41,8 +41,10 @@
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"/>
                                 <field name="phong_ban_cho_muon_id" 
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap'])]}"/>
-                                <field name="nhan_vien_muon_id" 
-                                    attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"/>
+                                <field name="nhan_vien_muon_id"
+                                    attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"
+                                    domain="[('phong_ban_hien_tai_id', '=', phong_ban_cho_muon_id)]"
+                                    options="{'no_create': True, 'no_open': False}"/>
                             </group>
                             <group string="Thời gian">
                                 <field name="thoi_gian_muon" 
@@ -79,14 +81,13 @@
                             <page string="Danh sách tài sản mượn" name="tai_san">
                                 <field name="don_muon_tai_san_ids" 
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}">
-                                    <tree editable="bottom">
+                                    <tree editable="bottom" no_open="1">
                                         <field name="phan_bo_tai_san_id" 
                                             string="Tài sản"
                                             domain="[('id','in',parent.ds_tai_san_chua_muon)]"
-                                            attrs="{'readonly': [('trang_thai_line', '!=', 'cho_muon')]}"/>
+                                            options="{'no_open': True, 'no_create': True}"/>
                                         <field name="tinh_trang_truoc_muon" 
-                                            string="TT trước mượn"
-                                            attrs="{'readonly': [('trang_thai_line', '!=', 'cho_muon')]}"/>
+                                            string="TT trước mượn"/>
                                         <field name="ghi_chu" string="Ghi chú"/>
                                         <field name="trang_thai_line" widget="badge"
                                             decoration-info="trang_thai_line == 'cho_muon'"

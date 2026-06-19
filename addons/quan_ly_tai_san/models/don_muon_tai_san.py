@@ -176,46 +176,68 @@ class DonMuonTaiSan(models.Model):
     @api.model
     def create(self, vals):
         if vals.get('ma_don_muon', 'New') == 'New':
-            vals['ma_don_muon'] = self.env['ir.sequence'].next_by_code('don_muon_tai_san') or 'DMT-' + fields.Date.today().strftime('%Y%m%d')
+            seq = self.env['ir.sequence'].next_by_code('don_muon_tai_san')
+            if seq:
+                vals['ma_don_muon'] = seq
+            else:
+                # Fallback: timestamp microsecond để đảm bảo unique
+                import time
+                vals['ma_don_muon'] = 'DMT-' + str(int(time.time() * 1000000))
         return super(DonMuonTaiSan, self).create(vals)
     
     # ============ ACTION METHODS ============
     def action_gui_duyet(self):
         """Gửi đơn để duyệt - Tự động tạo phiếu trong Quản lý mượn trả"""
         for record in self:
-            # Kiểm tra xem record đã được lưu chưa
             if isinstance(record.id, models.NewId):
                 raise UserError(_('Vui lòng lưu đơn mượn trước khi gửi duyệt!'))
-            
+
             if record.trang_thai != 'nhap':
                 raise UserError(_('Chỉ có thể gửi duyệt đơn ở trạng thái Nháp!'))
-            if not record.don_muon_tai_san_ids:
-                raise UserError(_('Vui lòng thêm ít nhất một tài sản vào đơn mượn!'))
-            
-            # Cập nhật trạng thái đơn
+
+            # Lấy lines từ đơn mượn
+            tai_san_lines = self.env['don_muon_tai_san_line'].sudo().search([
+                ('don_muon_id', '=', record.id)
+            ])
+
+            # Cập nhật trạng thái
             record.write({'trang_thai': 'cho_duyet'})
-            
-            # Tạo phiếu trong Quản lý mượn trả tài sản
+
+            # Copy lines sang phiếu mượn trả
             muon_tra_lines = []
-            for line in record.don_muon_tai_san_ids:
-                muon_tra_lines.append((0, 0, {
-                    'phan_bo_tai_san_id': line.phan_bo_tai_san_id.id if line.phan_bo_tai_san_id else False,
-                    'ghi_chu': line.ghi_chu or '',
-                }))
-            
-            muon_tra = self.env['muon_tra_tai_san'].create({
+            for line in tai_san_lines:
+                if line.phan_bo_tai_san_id and line.phan_bo_tai_san_id.id:
+                    muon_tra_lines.append((0, 0, {
+                        'phan_bo_tai_san_id': line.phan_bo_tai_san_id.id,
+                        'ghi_chu': line.ghi_chu or '',
+                    }))
+
+            # Tạo phiếu mượn trả
+            create_vals = {
                 'ma_don_muon_id': record.id,
-                'ten_phieu_muon_tra': f"Duyệt đơn mượn {record.ma_don_muon} - {record.ten_don_muon}",
+                'ten_phieu_muon_tra': f"Duyệt đơn mượn {record.ma_don_muon}",
                 'phong_ban_cho_muon_id': record.phong_ban_cho_muon_id.id,
                 'nhan_vien_muon_id': record.nhan_vien_muon_id.id,
                 'thoi_gian_muon': record.thoi_gian_muon,
                 'thoi_gian_tra_du_kien': record.thoi_gian_tra,
-                'ly_do_muon': record.ly_do,
+                'ly_do_muon': record.ly_do or '',
                 'trang_thai': 'cho_duyet',
-                'muon_tra_line_ids': muon_tra_lines,
-            })
-            
-            record.message_post(body=_('📤 Đơn mượn đã được gửi để phê duyệt. Mã phiếu: %s') % muon_tra.ma_phieu_muon_tra)
+            }
+
+            # Tạo phiếu trước (không có lines)
+            muon_tra = self.env['muon_tra_tai_san'].sudo().create(create_vals)
+
+            # Thêm lines sau khi tạo phiếu (tránh circular dependency)
+            if muon_tra_lines:
+                muon_tra.sudo().write({'muon_tra_line_ids': muon_tra_lines})
+
+            record.message_post(
+                body=_('📤 Đơn mượn đã gửi phê duyệt. Mã phiếu: %s') % muon_tra.ma_phieu_muon_tra
+            )
+
+            record.message_post(
+                body=_('📤 Đơn mượn đã được gửi để phê duyệt. Mã phiếu: %s') % muon_tra.ma_phieu_muon_tra
+            )
     
     def action_duyet(self):
         """Duyệt đơn mượn"""

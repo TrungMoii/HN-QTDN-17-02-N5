@@ -201,7 +201,7 @@ class MuonTraTaiSan(models.Model):
         for record in self:
             if record.trang_thai != 'cho_duyet':
                 raise UserError(_('Chỉ có thể duyệt đơn đang chờ duyệt!'))
-            
+
             if not record.muon_tra_line_ids:
                 raise UserError(_('Vui lòng thêm ít nhất một tài sản vào đơn mượn!'))
             
