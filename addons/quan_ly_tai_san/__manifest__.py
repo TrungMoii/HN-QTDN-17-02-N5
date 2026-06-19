@@ -54,6 +54,7 @@
             'quan_ly_tai_san/static/src/js/moment_locale_fix.js',
         ],
         'web.assets_backend': [
+            'quan_ly_tai_san/static/src/css/asset_modern.css',  # NEW: Modern UI
             'quan_ly_tai_san/static/src/js/date_picker_fix.js',
             'https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js',
             'https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment-with-locales.min.js',

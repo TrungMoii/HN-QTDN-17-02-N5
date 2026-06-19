@@ -81,8 +81,7 @@
                         </group>
                         <group string="Tài chính">
                             <field name="don_vi_tien_te"/>
-                            <field name="tong_gia_tri" widget="monetary" 
-                                   options="{'currency_field': 'don_vi_tien_te'}"/>
+                            <field name="tong_gia_tri"/>
                             <field name="phe_duyet_id" invisible="1"/>
                         </group>
                     </group>

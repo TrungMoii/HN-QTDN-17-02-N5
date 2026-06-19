@@ -456,37 +456,37 @@ class PheDuyetMuaTaiSan(models.Model):
             })
             
             # ===== BƯỚC 1: TẠO TÀI SẢN TRONG MODULE QUẢN LÝ TÀI SẢN =====
+            # Cải tiến từ phiên bản cũ: XÓA self.env.cr.commit() thủ công.
+            # Odoo tự động commit khi toàn bộ transaction kết thúc thành công.
             # Đây là bước QUAN TRỌNG NHẤT - phải thành công
             created_assets = False
             try:
                 created_assets = record._create_assets()
-                # Commit ngay lập tức để đảm bảo tài sản được lưu vĩnh viễn
-                # Ngay cả khi các bước sau bị lỗi, tài sản vẫn tồn tại
-                self.env.cr.commit()
+                # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() - vi phạm ACID
+                # Odoo sẽ tự động commit khi method kết thúc không có exception
             except Exception as e:
-                # Nếu không tạo được tài sản, rollback và báo lỗi
-                self.env.cr.rollback()
-                # Khôi phục trạng thái về draft
-                record.write({'state': 'draft', 'nguoi_phe_duyet_id': False, 'ngay_phe_duyet': False})
+                # Nếu không tạo được tài sản, raise exception để Odoo tự động rollback
+                # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.rollback() - Odoo tự xử lý
                 raise UserError(_('Lỗi khi tạo tài sản trong module quản lý tài sản:\n%s\n\nVui lòng kiểm tra:\n- Module Quản lý tài sản đã được cài đặt\n- Danh mục tài sản đã được thiết lập\n- Các trường bắt buộc đã đầy đủ') % str(e))
             
             # ===== BƯỚC 2: GHI NHẬN TÀI CHÍNH (SỔ CÁI) =====
+            # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() thủ công
             # Tạo bút toán kế toán
             try:
                 record._create_journal_entry()
-                self.env.cr.commit()  # Commit ngay nếu thành công
+                # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() - vi phạm ACID
             except Exception as e:
-                # Nếu gặp lỗi, chỉ log warning, không rollback tài sản
-                # Tài sản đã tạo ở bước 1 sẽ vẫn tồn tại
+                # Nếu gặp lỗi, chỉ log warning
                 record.message_post(
                     body=_('Cảnh báo: Không tạo được bút toán kế toán. Lỗi: %s\nTài sản đã được tạo thành công.') % str(e),
                     subject=_('Cảnh báo bút toán')
                 )
             
             # ===== BƯỚC 3: TẠO LỊCH KHẤU HAO =====
+            # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() thủ công
             try:
                 record._create_depreciation_schedule()
-                self.env.cr.commit()  # Commit nếu thành công
+                # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() - vi phạm ACID
             except Exception as e:
                 # Log lỗi nhưng tiếp tục
                 record.message_post(
@@ -495,9 +495,10 @@ class PheDuyetMuaTaiSan(models.Model):
                 )
             
             # ===== BƯỚC 4: GHI NHẬN KẾ TOÁN QUẢN TRỊ =====
+            # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() thủ công
             try:
                 record._create_management_accounting()
-                self.env.cr.commit()  # Commit nếu thành công
+                # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() - vi phạm ACID
             except Exception as e:
                 # Log lỗi nhưng tiếp tục
                 record.message_post(
@@ -506,13 +507,14 @@ class PheDuyetMuaTaiSan(models.Model):
                 )
             
             # ===== BƯỚC 5: CẬP NHẬT ĐỀ XUẤT GỐC =====
+            # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() thủ công
             try:
                 if record.de_xuat_mua_id and record.de_xuat_mua_id.exists():
                     record.de_xuat_mua_id._on_approval_approved()
                     # Đồng bộ tài sản vào đề xuất
                     if created_assets:
                         record.de_xuat_mua_id.write({'tai_san_ids': [(6, 0, created_assets.ids)]})
-                    self.env.cr.commit()
+                    # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() - vi phạm ACID
             except Exception as e:
                 # Bỏ qua nếu không thể cập nhật đề xuất
                 record.message_post(
@@ -522,7 +524,8 @@ class PheDuyetMuaTaiSan(models.Model):
             
             # ===== HOÀN THÀNH =====
             record.write({'state': 'done'})
-            self.env.cr.commit()
+            # Cải tiến từ phiên bản cũ: Bỏ self.env.cr.commit() cuối cùng
+            # Odoo tự động commit toàn bộ transaction khi method kết thúc thành công
             
             # Gửi thông báo thành công
             asset_count = len(created_assets) if created_assets else 0

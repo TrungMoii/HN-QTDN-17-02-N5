@@ -32,6 +32,14 @@
          'views/lich_su_cong_tac.xml',
         'views/menu.xml',
     ],
+    
+    # Assets - Modern UI CSS
+    'assets': {
+        'web.assets_backend': [
+            'nhan_su/static/src/css/hrm_modern.css',
+        ],
+    },
+    
     # only loaded in demonstration mode
     'demo': [
         'demo/demo.xml',

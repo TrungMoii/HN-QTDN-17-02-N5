@@ -214,13 +214,13 @@
                                 <div class="chart-body" style="padding: 0;">
                                     <field name="department_distribution_ids">
                                         <tree string="Phân Bổ Phòng Ban" create="false" edit="false" delete="false">
-                                            <field name="department_id"/>
+                                            <field name="phong_ban_id"/>
                                             <field name="tai_san_count"/>
-                                            <field name="tai_san_value" widget="monetary"/>
+                                            <field name="tai_san_value"/>
                                             <field name="de_xuat_count"/>
-                                            <field name="de_xuat_value" widget="monetary"/>
+                                            <field name="de_xuat_value"/>
                                             <field name="approved_count"/>
-                                            <field name="approved_value" widget="monetary"/>
+                                            <field name="approved_value"/>
                                         </tree>
                                     </field>
                                 </div>

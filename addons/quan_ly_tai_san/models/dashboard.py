@@ -50,8 +50,8 @@ class AssetDashboard(models.Model):
             departments_data = []
         
         # Tổng số tài sản đang mượn & đã trả
-        borrowed_assets = self.env['muon_tra_tai_san'].search_count([('trang_thai', '=', 'dang-muon')])
-        returned_assets = self.env['muon_tra_tai_san'].search_count([('trang_thai', '=', 'da-tra')])
+        borrowed_assets = self.env['muon_tra_tai_san'].search_count([('trang_thai', '=', 'dang_muon')])
+        returned_assets = self.env['muon_tra_tai_san'].search_count([('trang_thai', '=', 'da_tra')])
         
         return {
             'total_assets': total_assets,
@@ -72,7 +72,7 @@ class AssetDashboard(models.Model):
         """Dashboard Đơn Mượn & Trả Tài Sản"""
         # Số đơn mượn đang chờ duyệt
         pending_requests = self.env['don_muon_tai_san'].search_count([
-            ('trang_thai', '=', 'dang-cho')
+            ('trang_thai', '=', 'cho_duyet')
         ])
         
         # Số đơn đã duyệt và chưa trả

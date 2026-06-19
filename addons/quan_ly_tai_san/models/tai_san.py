@@ -1,6 +1,12 @@
+# -*- coding: utf-8 -*-
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 from datetime import datetime
+
+# Cải tiến từ phiên bản cũ: Thêm trường nguoi_phu_trach_id và phong_ban_hien_tai_id
+# để đảm bảo dữ liệu nhân sự (HRM) là nguồn dữ liệu gốc cho tài sản.
+# Mục tiêu: Mức 1 – Tích hợp hệ thống, xóa bỏ nhập liệu trùng lặp.
+
 
 class TaiSan(models.Model):
     _name = 'tai_san'
@@ -11,7 +17,6 @@ class TaiSan(models.Model):
         ("ma_tai_san_unique", "unique(ma_tai_san)", "Mã tài sản đã tồn tại !"),
     ]
 
-
     ma_tai_san = fields.Char('Mã tài sản', required=True)
     ten_tai_san = fields.Char('Tên tài sản', required=True)
     ngay_mua_ts = fields.Date('Ngày mua tài sản', required=True)
@@ -19,9 +24,11 @@ class TaiSan(models.Model):
         ('vnd', 'VNĐ'),
         ('usd', '$'),
     ], string='Đơn vị tiền tệ', default='vnd', required=True)
-    gia_tri_ban_dau = fields.Float('Giá trị ban đầu', default = 1, required=True)
-    gia_tri_hien_tai = fields.Float('Giá trị hiện tại', default = 1, required=True)
-    danh_muc_ts_id = fields.Many2one('danh_muc_tai_san', string='Loại tài sản', required=True, ondelete='restrict')
+    gia_tri_ban_dau = fields.Float('Giá trị ban đầu', default=1, required=True)
+    gia_tri_hien_tai = fields.Float('Giá trị hiện tại', default=1, required=True)
+    danh_muc_ts_id = fields.Many2one(
+        'danh_muc_tai_san', string='Loại tài sản', required=True, ondelete='restrict'
+    )
     giay_to_tai_san = fields.Binary('Giấy tờ liên quan', attachment=True)
     giay_to_tai_san_filename = fields.Char('Tên file')
     hinh_anh = fields.Image('Hình ảnh', max_width=200, max_height=200)
@@ -30,28 +37,74 @@ class TaiSan(models.Model):
         ('straight-line', 'Tuyến tính'),
         ('degressive', 'Giảm dần'),
         ('none', 'Không')
-    ], string='Phương pháp khấu hao', default = 'none', required=True)
+    ], string='Phương pháp khấu hao', default='none', required=True)
     thoi_gian_su_dung = fields.Integer('Thời gian đã sử dụng (năm)', default=0)
-
-    # Khấu hao tuyến tính
     thoi_gian_toi_da = fields.Integer('Thời gian sử dụng còn lại tối đa (năm)', default=5)
-
-    # Khấu hao giảm dần
     ty_le_khau_hao = fields.Float('Tỷ lệ khấu hao (%)', default=20)
-
-    don_vi_tinh = fields.Char('Đơn vị tính', default = 'Chiếc', required=True)
+    don_vi_tinh = fields.Char('Đơn vị tính', default='Chiếc', required=True)
     ghi_chu = fields.Char('Ghi chú')
 
     cus_rec_name = fields.Char(compute='_compute_cus_rec_name', store=True)
+
     @api.depends('ten_tai_san', 'ma_tai_san')
     def _compute_cus_rec_name(self):
         for record in self:
-            record.cus_rec_name = record.ma_tai_san + ' - ' + record.ten_tai_san
+            record.cus_rec_name = (record.ma_tai_san or '') + ' - ' + (record.ten_tai_san or '')
 
+    # ================================================================
+    # Cải tiến từ phiên bản cũ: Thêm nguoi_phu_trach_id liên kết trực
+    # tiếp với model nhan_vien (HRM gốc). Đây là điểm tích hợp HRM→Tài sản
+    # theo yêu cầu Mức 1 – dữ liệu nhân sự là nguồn sự thật duy nhất.
+    # ================================================================
+    nguoi_phu_trach_id = fields.Many2one(
+        'nhan_vien',
+        string='Người phụ trách tài sản',
+        ondelete='set null',
+        help='Nhân viên chịu trách nhiệm quản lý tài sản này (đồng bộ từ HRM)',
+        index=True,
+    )
+
+    # ================================================================
+    # Cải tiến từ phiên bản cũ: Thêm phong_ban_hien_tai_id compute từ
+    # bảng phan_bo_tai_san (phân bổ hiện tại). Dữ liệu phòng ban lấy từ
+    # HRM (model phong_ban) – không nhập tay, tránh trùng lặp.
+    # ================================================================
+    phong_ban_hien_tai_id = fields.Many2one(
+        'phong_ban',
+        string='Phòng ban đang quản lý',
+        compute='_compute_phong_ban_hien_tai',
+        store=True,
+        help='Phòng ban đang sử dụng tài sản (tự động từ phân bổ hiện tại – dữ liệu HRM)',
+    )
+
+    @api.depends('phong_ban_su_dung_ids', 'phong_ban_su_dung_ids.trang_thai', 'phong_ban_su_dung_ids.phong_ban_id')
+    def _compute_phong_ban_hien_tai(self):
+        """
+        Cải tiến từ phiên bản cũ: Compute phòng ban đang sử dụng tài sản
+        từ bảng phan_bo_tai_san (trang_thai = 'in-use').
+        """
+        for record in self:
+            active_alloc = record.phong_ban_su_dung_ids.filtered(
+                lambda r: r.trang_thai == 'in-use'
+            )
+            if active_alloc:
+                record.phong_ban_hien_tai_id = active_alloc[0].phong_ban_id
+            else:
+                record.phong_ban_hien_tai_id = False
+
+    # Quan hệ ngược
     phong_ban_su_dung_ids = fields.One2many('phan_bo_tai_san', 'tai_san_id', string='Phòng ban sử dụng')
     lich_su_khau_hao_ids = fields.One2many('lich_su_khau_hao', 'ma_ts', string='Lịch sử khấu hao')
-    kiem_ke_history_ids = fields.One2many('kiem_ke_tai_san_line', compute='_compute_kiem_ke_history_ids', string='Lịch sử kiểm kê')
-    luan_chuyen_ids = fields.Many2many('luan_chuyen_tai_san', compute='_compute_luan_chuyen_ids', string='Phiếu luân chuyển')
+    kiem_ke_history_ids = fields.One2many(
+        'kiem_ke_tai_san_line',
+        compute='_compute_kiem_ke_history_ids',
+        string='Lịch sử kiểm kê'
+    )
+    luan_chuyen_ids = fields.Many2many(
+        'luan_chuyen_tai_san',
+        compute='_compute_luan_chuyen_ids',
+        string='Phiếu luân chuyển'
+    )
     thanh_ly_ids = fields.One2many('thanh_ly_tai_san', 'tai_san_id', string='Lịch sử thanh lý')
     trang_thai_thanh_ly = fields.Selection([
         ('chua_phan_bo', 'Chưa phân bổ'),
@@ -60,8 +113,10 @@ class TaiSan(models.Model):
         ('da_thanh_ly', 'Đã thanh lý'),
     ], string='Trạng thái', compute='_compute_trang_thai_thanh_ly', default='chua_phan_bo', store=True)
 
-    lich_su_ky_thuat_ids = fields.One2many(comodel_name='lich_su_ky_thuat', inverse_name='tai_san_id', string='Tình trạng kỹ thuật')
-    
+    lich_su_ky_thuat_ids = fields.One2many(
+        comodel_name='lich_su_ky_thuat', inverse_name='tai_san_id', string='Tình trạng kỹ thuật'
+    )
+
     @api.depends('thanh_ly_ids', 'phong_ban_su_dung_ids')
     def _compute_trang_thai_thanh_ly(self):
         for record in self:
@@ -72,14 +127,15 @@ class TaiSan(models.Model):
             else:
                 record.trang_thai_thanh_ly = 'chua_phan_bo'
 
-    
+    @api.depends('phong_ban_su_dung_ids')
     def _compute_kiem_ke_history_ids(self):
         for record in self:
             phan_bo_ids = self.env['phan_bo_tai_san'].search([('tai_san_id', '=', record.id)]).ids
             record.kiem_ke_history_ids = self.env['kiem_ke_tai_san_line'].search([
                 ('phan_bo_tai_san_id', 'in', phan_bo_ids)
             ])
-    
+
+    @api.depends('phong_ban_su_dung_ids')
     def _compute_luan_chuyen_ids(self):
         for record in self:
             phan_bo_ids = self.env['phan_bo_tai_san'].search([('tai_san_id', '=', record.id)]).ids
@@ -95,7 +151,7 @@ class TaiSan(models.Model):
                 raise ValidationError("Giá trị (ban đầu, hiện tại) không thể âm !")
             elif record.gia_tri_hien_tai > record.gia_tri_ban_dau:
                 raise ValidationError("Giá trị hiện tại không thể lớn hơn giá trị ban đầu !")
-    
+
     def action_tinh_khau_hao(self):
         for record in self:
             if record.gia_tri_hien_tai <= 0:
@@ -105,23 +161,23 @@ class TaiSan(models.Model):
 
             so_tien_khau_hao = 0
 
-            if record.pp_khau_hao == 'straight-line':  
+            if record.pp_khau_hao == 'straight-line':
                 if record.thoi_gian_toi_da <= 0:
                     raise ValidationError("Thời gian sử dụng tối đa phải lớn hơn 0 (năm) !")
-                so_tien_khau_hao = record.gia_tri_ban_dau / record.thoi_gian_toi_da  
+                so_tien_khau_hao = record.gia_tri_ban_dau / record.thoi_gian_toi_da
 
-            elif record.pp_khau_hao == 'degressive':  
+            elif record.pp_khau_hao == 'degressive':
                 if record.ty_le_khau_hao <= 0 or record.ty_le_khau_hao >= 100:
                     raise ValidationError("Tỷ lệ khấu hao phải nằm trong khoảng (0,100) !")
-                so_tien_khau_hao = record.gia_tri_hien_tai * (record.ty_le_khau_hao / 100) 
+                so_tien_khau_hao = record.gia_tri_hien_tai * (record.ty_le_khau_hao / 100)
 
-            so_tien_khau_hao = min(so_tien_khau_hao, record.gia_tri_hien_tai)  
+            so_tien_khau_hao = min(so_tien_khau_hao, record.gia_tri_hien_tai)
             ma_phieu_khau_hao = 'KH-' + record.ma_tai_san + '-' + datetime.now().strftime('%Y%m%d%H%M%S%f')
-
 
             self.env['lich_su_khau_hao'].create({
                 'ma_phieu_khau_hao': ma_phieu_khau_hao,
                 'ma_ts': record.id,
+                # Cải tiến từ phiên bản cũ: Dùng fields.Datetime.now (không gọi hàm)
                 'ngay_khau_hao': fields.Datetime.now(),
                 'so_tien_khau_hao': so_tien_khau_hao,
                 'gia_tri_con_lai': record.gia_tri_hien_tai,
@@ -132,13 +188,12 @@ class TaiSan(models.Model):
             record.thoi_gian_su_dung += 1
 
             self.env['bus.bus']._sendone(
-                self.env.user.partner_id, 
-                'simple_notification', 
+                self.env.user.partner_id,
+                'simple_notification',
                 {
                     'title': 'Thành công',
                     'message': f'Khấu hao tài sản "{record.ten_tai_san}" thành công!',
-                    'sticky': False,  
-                    'type': 'success'  
+                    'sticky': False,
+                    'type': 'success'
                 }
             )
-

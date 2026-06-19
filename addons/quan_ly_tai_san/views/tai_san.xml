@@ -20,13 +20,32 @@
 								<field name="hinh_anh" widget="image" nolabel="1"/>
 							</group>
 						</group>
+
+						<!-- Cải tiến từ phiên bản cũ: Thêm nhóm thông tin HRM gốc.
+						     nguoi_phu_trach_id và phong_ban_hien_tai_id là dữ liệu
+						     đồng bộ từ module nhan_su – không nhập tay, xóa bỏ trùng lặp. -->
+						<group string="Thông tin HRM (Dữ liệu đồng bộ từ Quản lý Nhân sự)">
+							<group>
+								<field name="nguoi_phu_trach_id"
+								       string="Người phụ trách"
+								       options="{'no_create': True}"
+								       help="Chọn nhân viên phụ trách tài sản này (đồng bộ từ HRM)"/>
+							</group>
+							<group>
+								<field name="phong_ban_hien_tai_id"
+								       string="Phòng ban đang quản lý"
+								       readonly="1"
+								       help="Tự động tính từ phân bổ tài sản hiện tại"/>
+							</group>
+						</group>
+
 						<group>
 							<group string="Phương pháp Khấu hao tự động">
 								<field name="pp_khau_hao"/>
 								<field name="thoi_gian_su_dung"/>
-								<field name="thoi_gian_toi_da" 
+								<field name="thoi_gian_toi_da"
 									attrs="{'invisible': ['|', ('pp_khau_hao','=','none'), ('pp_khau_hao','=','degressive')]}"/>
-								<field name="ty_le_khau_hao" 
+								<field name="ty_le_khau_hao"
 									attrs="{'invisible': ['|', ('pp_khau_hao','=','none'), ('pp_khau_hao','=','straight-line')]}"/>
 								<button name="action_tinh_khau_hao"
 									attrs="{'invisible': ['|', ('pp_khau_hao','=','none'), ('id','=',False)]}"
@@ -54,8 +73,13 @@
 								<field name="phong_ban_su_dung_ids" readonly="True">
 									<tree>
 										<field name="phong_ban_id" string="Phòng ban"/>
+										<!-- Cải tiến từ phiên bản cũ: Thêm cột nhân viên sử dụng
+										     để hiển thị ngay ai đang dùng, tích hợp HRM. -->
+										<field name="nhan_vien_su_dung_id" string="Nhân viên sử dụng"/>
 										<field name="trang_thai" string="Trạng thái" />
+										<field name="tinh_trang" string="Tình trạng" />
 										<field name="vi_tri_tai_san_id" string="Vị trí tài sản"/>
+										<field name="ngay_phat" string="Ngày phân bổ"/>
 									</tree>
 								</field>
 							</page>
@@ -108,28 +132,31 @@
 				</form>
 			</field>
 		</record>
+
 		<!-- Tree view -->
 		<record id="tai_san_view_tree" model="ir.ui.view">
-			<field name="name">
-				tai_san.view.tree
-			</field>
+			<field name="name">tai_san.view.tree</field>
 			<field name="model">tai_san</field>
 			<field name="arch" type="xml">
+				<!-- Cải tiến từ phiên bản cũ: Thêm cột nguoi_phu_trach_id và
+				     phong_ban_hien_tai_id vào danh sách để nhìn nhanh ai đang
+				     quản lý tài sản – tích hợp HRM vào màn hình chính. -->
 				<tree string="Danh sách tài sản">
 					<field name="ma_tai_san" />
 					<field name="ten_tai_san" />
 					<field name="danh_muc_ts_id" />
+					<field name="nguoi_phu_trach_id" string="Người phụ trách" optional="show"/>
+					<field name="phong_ban_hien_tai_id" string="Phòng ban" optional="show"/>
 					<field name="gia_tri_hien_tai" />
 					<field name="trang_thai_thanh_ly" />
 					<field name="ghi_chu" />
 				</tree>
 			</field>
 		</record>
+
 		<!-- Search view -->
 		<record id="tai_san_view_search" model="ir.ui.view">
-			<field name="name">
-				tai_san.view.search
-			</field>
+			<field name="name">tai_san.view.search</field>
 			<field name="model">tai_san</field>
 			<field name="arch" type="xml">
 				<search string="Tìm kiếm tài sản">
@@ -138,9 +165,18 @@
 					<field name="ngay_mua_ts" string="Ngày mua"/>
 					<field name="pp_khau_hao" string="Phương pháp khấu hao"/>
 					<field name="don_vi_tinh" string="Đơn vị tính"/>
+					<!-- Cải tiến từ phiên bản cũ: Thêm filter theo người phụ trách
+					     và phòng ban – cho phép tìm kiếm tài sản theo HRM -->
+					<field name="nguoi_phu_trach_id" string="Người phụ trách"/>
+					<field name="phong_ban_hien_tai_id" string="Phòng ban"/>
+					<group expand="0" string="Nhóm theo">
+						<filter name="group_phong_ban" string="Phòng ban" context="{'group_by': 'phong_ban_hien_tai_id'}"/>
+						<filter name="group_nguoi_phu_trach" string="Người phụ trách" context="{'group_by': 'nguoi_phu_trach_id'}"/>
+					</group>
 				</search>
 			</field>
 		</record>
+
 		<!-- Action -->
 		<record id="tai_san_action" model="ir.actions.act_window">
 			<field name="name">Tài sản cụ thể</field>

@@ -28,14 +28,6 @@
                     </header>
                     
                     <sheet>
-                        <div class="oe_button_box" name="button_box">
-                            <button name="%(quan_ly_tai_san.don_muon_tai_san_action)d" type="action"
-                                class="oe_stat_button" icon="fa-list"
-                                attrs="{'invisible': [('so_tai_san', '=', 0)]}">
-                                <field name="so_tai_san" widget="statinfo" string="Tài sản"/>
-                            </button>
-                        </div>
-                        
                         <div class="oe_title">
                             <h1>
                                 <field name="ma_don_muon" readonly="1"/>

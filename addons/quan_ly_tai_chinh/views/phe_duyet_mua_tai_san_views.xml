@@ -94,8 +94,7 @@
                     <group>
                         <group string="Tài chính">
                             <field name="don_vi_tien_te" readonly="1"/>
-                            <field name="tong_gia_tri" widget="monetary" readonly="1"
-                                   options="{'currency_field': 'don_vi_tien_te'}"/>
+                            <field name="tong_gia_tri" readonly="1"/>
                         </group>
                         <group string="Tài khoản kế toán" states="draft">
                             <field name="tk_tai_san_id" required="1"

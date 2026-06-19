@@ -50,4 +50,4 @@ class DonMuonTaiSanLine(models.Model):
         ('da_tra', 'Đã trả'),
         ('hong', 'Bị hỏng'),
         ('mat', 'Bị mất'),
-    ], string='Trạng thái', default='cho_muon', tracking=True)
+    ], string='Trạng thái', default='cho_muon')

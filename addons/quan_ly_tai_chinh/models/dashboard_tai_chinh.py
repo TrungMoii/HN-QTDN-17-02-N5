@@ -637,7 +637,7 @@ class DashboardTaiChinh(models.TransientModel):
                 all_phe_duyet = self.env['phe_duyet_mua_tai_san'].search([])
                 
                 # Đề xuất đã được phê duyệt
-                approved_phe_duyet = all_phe_duyet.filtered(lambda p: p.trang_thai in ['approved', 'done'])
+                approved_phe_duyet = all_phe_duyet.filtered(lambda p: p.state in ['approved', 'done'])
                 
                 trends.append((0, 0, {
                     'month': month_str,
@@ -652,33 +652,36 @@ class DashboardTaiChinh(models.TransientModel):
     def _compute_department_distribution(self):
         """Tính toán phân bổ theo phòng ban"""
         for record in self:
-            # Xóa dữ liệu cũ
             record.department_distribution_ids.unlink()
             
             distributions = []
-            departments = self.env['hr.department'].search([])
+            # Dùng custom model phong_ban thay vì hr.department
+            phong_ban_list = self.env['phong_ban'].search([])
             
-            for dept in departments:
-                # Tài sản của phòng ban
-                tai_san_records = self.env['tai_san'].search([
-                    ('phong_ban_id', '=', dept.id),
-                    ('trang_thai', '!=', 'thanh_ly')
+            for pb in phong_ban_list:
+                # Tài sản đang dùng tại phòng ban (qua phan_bo_tai_san)
+                phan_bo = self.env['phan_bo_tai_san'].search([
+                    ('phong_ban_id', '=', pb.id),
+                    ('trang_thai', '=', 'in-use'),
                 ])
-                
-                # Đề xuất của phòng ban
+                tai_san_records = phan_bo.mapped('tai_san_id')
+
+                # Đề xuất mua của phòng ban
                 de_xuat_records = self.env['phe_duyet_mua_tai_san'].search([
-                    ('phong_ban_id', '=', dept.id)
+                    ('phong_ban_id', '=', pb.id)
                 ])
-                
-                approved_de_xuat = de_xuat_records.filtered(lambda d: d.trang_thai == 'approved')
+                approved_de_xuat = de_xuat_records.filtered(lambda d: d.state == 'approved')
                 
                 if tai_san_records or de_xuat_records:
                     distributions.append((0, 0, {
-                        'department_id': dept.id,
+                        'phong_ban_id': pb.id,
                         'tai_san_count': len(tai_san_records),
-                        'tai_san_value': sum(tai_san_records.mapped('nguyen_gia')),
+                        'tai_san_value': sum(tai_san_records.mapped('gia_tri_ban_dau')),
                         'de_xuat_count': len(de_xuat_records),
                         'de_xuat_value': sum(de_xuat_records.mapped('tong_gia_tri')),
+                        'approved_count': len(approved_de_xuat),
+                        'approved_value': sum(approved_de_xuat.mapped('tong_gia_tri'))
+                    }))
                         'approved_count': len(approved_de_xuat),
                         'approved_value': sum(approved_de_xuat.mapped('tong_gia_tri'))
                     }))
@@ -722,15 +725,16 @@ class DashboardDepartmentDistribution(models.TransientModel):
     """Model lưu phân bổ tài sản và đề xuất theo phòng ban"""
     _name = 'dashboard.department.distribution'
     _description = 'Phân bổ theo phòng ban'
-    _order = 'department_id'
+    _order = 'phong_ban_id'
 
     dashboard_id = fields.Many2one('dashboard.tai.chinh', string='Dashboard', ondelete='cascade', required=True)
-    department_id = fields.Many2one('hr.department', string='Phòng ban', required=True)
-    tai_san_count = fields.Integer(string='Số tài sản', help='Số lượng tài sản đang quản lý')
-    tai_san_value = fields.Float(string='Giá trị tài sản', help='Tổng giá trị tài sản hiện tại')
-    de_xuat_count = fields.Integer(string='Số đề xuất', help='Số lượng đề xuất mua tài sản')
-    de_xuat_value = fields.Float(string='Giá trị đề xuất', help='Tổng giá trị đề xuất')
-    approved_count = fields.Integer(string='Số đề xuất đã duyệt', help='Số đề xuất đã được phê duyệt')
-    approved_value = fields.Float(string='Giá trị đã duyệt', help='Giá trị đề xuất đã được phê duyệt')
+    # Dùng custom model phong_ban thay vì hr.department
+    phong_ban_id = fields.Many2one('phong_ban', string='Phòng ban', required=False)
+    tai_san_count = fields.Integer(string='Số tài sản')
+    tai_san_value = fields.Float(string='Giá trị tài sản')
+    de_xuat_count = fields.Integer(string='Số đề xuất')
+    de_xuat_value = fields.Float(string='Giá trị đề xuất')
+    approved_count = fields.Integer(string='Số đề xuất đã duyệt')
+    approved_value = fields.Float(string='Giá trị đã duyệt')
     company_id = fields.Many2one('res.company', string='Công ty', default=lambda self: self.env.company)
     currency_id = fields.Many2one('res.currency', string='Tiền tệ', related='company_id.currency_id', readonly=True)

@@ -1,0 +1,203 @@
+/* ============================================
+   HRM MODERN UI - nhan_su module
+   Odoo 15 compatible - No @import, no :root vars
+   ============================================ */
+
+/* ---- LIST VIEW: Header gradient + fix hover ---- */
+.o_list_view .o_list_table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.o_list_view .o_list_table thead th {
+    color: #fff !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    padding: 14px 12px !important;
+    border: none !important;
+    white-space: nowrap;
+}
+
+/* Fix hover - giữ chữ trắng, không underline */
+.o_list_view .o_list_table thead th:hover,
+.o_list_view .o_list_table thead th:hover span,
+.o_list_view .o_list_table thead th:hover a,
+.o_list_view .o_list_table thead th:hover * {
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.o_list_view .o_list_table thead th.o_column_sortable:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+    cursor: pointer;
+}
+
+.o_list_view .o_list_table thead th a,
+.o_list_view .o_list_table thead th a:hover,
+.o_list_view .o_list_table thead th a:visited {
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.o_list_view .o_list_table thead th .o_resize_handle {
+    background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* ---- LIST VIEW: Body rows ---- */
+.o_list_view .o_list_table tbody tr {
+    transition: background 0.2s ease;
+}
+
+.o_list_view .o_list_table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.06) !important;
+}
+
+.o_list_view .o_list_table tbody td {
+    padding: 12px !important;
+    vertical-align: middle !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.o_list_view .o_list_table {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ---- FORM VIEW: Sheet card ---- */
+.o_form_view .o_form_sheet {
+    background: #fff !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.09) !important;
+    padding: 28px !important;
+}
+
+/* ---- FORM VIEW: Labels ---- */
+.o_form_view .o_form_label {
+    font-weight: 600 !important;
+    color: #374151 !important;
+    font-size: 0.85rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.4px !important;
+}
+
+/* ---- FORM VIEW: Inputs ---- */
+.o_form_view .o_field_widget input,
+.o_form_view .o_field_widget select,
+.o_form_view .o_field_widget textarea {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.o_form_view .o_field_widget input:focus,
+.o_form_view .o_field_widget select:focus,
+.o_form_view .o_field_widget textarea:focus {
+    border-color: #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12) !important;
+    outline: none !important;
+}
+
+/* ---- STATUS BAR ---- */
+.o_statusbar_status .o_arrow_button.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+}
+
+/* ---- BUTTONS ---- */
+.o_form_view .btn-primary,
+.o_form_view .o_form_button_save {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35) !important;
+}
+
+.o_form_view .btn-primary:hover,
+.o_form_view .o_form_button_save:hover {
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.5) !important;
+}
+
+/* ---- NOTEBOOK TABS ---- */
+.o_notebook .nav-tabs .nav-link {
+    border-radius: 8px 8px 0 0 !important;
+    font-weight: 600 !important;
+    color: #6b7280 !important;
+    border: 1.5px solid #e5e7eb !important;
+    background: #f9fafb !important;
+    padding: 10px 20px !important;
+    transition: all 0.2s ease !important;
+}
+
+.o_notebook .nav-tabs .nav-link.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3) !important;
+}
+
+/* ---- BADGES ---- */
+.badge.badge-success { background: #10b981 !important; color: #fff !important; }
+.badge.badge-warning { background: #f59e0b !important; color: #fff !important; }
+.badge.badge-danger  { background: #ef4444 !important; color: #fff !important; }
+.badge.badge-info    { background: #3b82f6 !important; color: #fff !important; }
+.badge.badge-primary { background: #667eea !important; color: #fff !important; }
+
+.badge {
+    border-radius: 20px !important;
+    padding: 4px 12px !important;
+    font-weight: 600 !important;
+    font-size: 0.8rem !important;
+}
+
+/* ---- KANBAN ---- */
+.o_kanban_record {
+    border-radius: 12px !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.o_kanban_record:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14) !important;
+}
+
+/* ---- STAT BUTTONS ---- */
+.o_form_view .oe_stat_button {
+    border-radius: 12px !important;
+    border: 1.5px solid #e5e7eb !important;
+    transition: all 0.2s ease !important;
+}
+
+.o_form_view .oe_stat_button:hover {
+    border-color: #667eea !important;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2) !important;
+}
+
+/* ---- FADE IN ANIMATION ---- */
+@keyframes hrm_fadeIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.o_list_view .o_list_table {
+    animation: hrm_fadeIn 0.35s ease;
+}
+
+.o_form_view .o_form_sheet {
+    animation: hrm_fadeIn 0.35s ease;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 768px) {
+    .o_form_view .o_form_sheet {
+        padding: 16px !important;
+    }
+    .o_list_view .o_list_table tbody td {
+        padding: 8px !important;
+    }
+}

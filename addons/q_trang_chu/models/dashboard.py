@@ -301,37 +301,7 @@ class DashboardMain(models.TransientModel):
                         'icon': 'fa-file-text',
                         'color': status[1],
                         'title': f'Đơn mượn #{don.id}',
-                        'desc': f'{don.nhan_vien_muon_id.name or "N/A"} - {status[0]}',
-                        'date': don.create_date.strftime('%d/%m/%Y %H:%M') if don.create_date else '',
-                    })
-            except Exception as e:
-                _logger.warning(f"Error getting recent activities: {e}")
-            
-            if activities:
-                html = '<div class="list-group list-group-flush">'
-                for act in activities[:5]:
-                    html += f'''
-                    <div class="list-group-item d-flex align-items-center border-0 px-0">
-                        <div style="width: 40px; height: 40px; background: var(--{act['color']}, #6c757d); 
-                                    border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-right: 15px;">
-                            <i class="fa {act['icon']} text-white"></i>
-                        </div>
-                        <div class="flex-grow-1">
-                            <div class="fw-bold">{act['title']}</div>
-                            <small class="text-muted">{act['desc']}</small>
-                        </div>
-                        <small class="text-muted">{act['date']}</small>
-                    </div>
-                    '''
-                html += '</div>'
-                record.hoat_dong_html = html
-            else:
-                record.hoat_dong_html = '''
-                <div class="text-center py-4 text-muted">
-                    <i class="fa fa-inbox fa-3x mb-2"></i>
-                    <p>Chưa có hoạt động nào</p>
-                </div>
-                '''
+                        'desc': f'{don.nhan_vien_muon_id.ho_ten or "N/A"} - {status[0]}',
 
     # ============ ACTION BUTTONS ============
     def action_open_don_muon(self):
@@ -549,13 +519,13 @@ class DashboardMain(models.TransientModel):
             TaiSan = self.env['tai_san']
             
             for dm in DanhMuc.search([]):
-                count = TaiSan.search_count([('danh_muc_id', '=', dm.id)])
+                count = TaiSan.search_count([('danh_muc_ts_id', '=', dm.id)])
                 if count > 0:
                     result.append({
-                        'name': dm.ten_danh_muc,
+                        'name': dm.ten_danh_muc_ts,
                         'value': count,
                     })
-        except:
+        except Exception:
             pass
         return result
 

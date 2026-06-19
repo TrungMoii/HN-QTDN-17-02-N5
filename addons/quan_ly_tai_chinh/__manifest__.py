@@ -41,6 +41,7 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'quan_ly_tai_chinh/static/src/css/finance_modern.css',
             'quan_ly_tai_chinh/static/css/dashboard_style.css',
             'quan_ly_tai_chinh/static/css/bao_cao_style.css',
             'quan_ly_tai_chinh/static/js/bao_cao_charts.js',

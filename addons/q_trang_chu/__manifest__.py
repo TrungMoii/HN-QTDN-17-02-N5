@@ -29,12 +29,13 @@
     ],
 
     # Data files
+    # Cải tiến từ phiên bản cũ: Sắp xếp lại thứ tự load - views trước, menu sau
     'data': [
         'security/ir.model.access.csv',
         'data/chatbot_knowledge_data.xml',
-        'views/dashboard_views.xml',
-        'views/chatbot_views.xml',
-        'views/menu.xml',
+        'views/dashboard_views.xml',  # Load views và actions trước
+        'views/chatbot_views.xml',     # Load tất cả views và actions
+        'views/menu.xml',               # Load menu cuối cùng (menu tham chiếu actions)
     ],
 
     # Assets

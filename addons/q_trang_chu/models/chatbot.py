@@ -223,20 +223,20 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
             # Tìm nhân viên tương ứng
             nhan_vien = self.env['nhan_vien'].search([('user_id', '=', user.id)], limit=1)
             if nhan_vien:
-                phong_ban = nhan_vien.phong_ban_id.ten_phong_ban if nhan_vien.phong_ban_id else 'Chưa phân công'
-                context_parts.append(f"🏢 Nhân viên: {nhan_vien.name}, Phòng ban: {phong_ban}")
+                phong_ban = nhan_vien.phong_ban_hien_tai_id.ten_phong_ban if nhan_vien.phong_ban_hien_tai_id else 'Chưa phân công'
+                context_parts.append(f"🏢 Nhân viên: {nhan_vien.ho_ten}, Phòng ban: {phong_ban}")
             
             # Thống kê tài sản
             TaiSan = self.env['tai_san']
             total_assets = TaiSan.search_count([])
-            active_assets = TaiSan.search_count([('trang_thai_thanh_ly', '=', 'dang_su_dung')])
+            active_assets = TaiSan.search_count([('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo'])])
             context_parts.append(f"📊 Tổng số tài sản: {total_assets}, đang sử dụng: {active_assets}")
             
             # Tài sản có thể mượn (liệt kê tên cụ thể)
             PhanBo = self.env['phan_bo_tai_san']
             available_assets = PhanBo.search([('tinh_trang', '=', 'binh_thuong')], limit=10)
             if available_assets:
-                asset_names = [f"{a.tai_san_id.ten_tai_san} ({a.phong_ban_id.ten_phong_ban})" for a in available_assets[:5]]
+                asset_names = [f"{a.tai_san_id.ten_tai_san} ({a.phong_ban_id.ten_phong_ban if a.phong_ban_id else 'N/A'})" for a in available_assets[:5]]
                 context_parts.append(f"📦 Tài sản sẵn sàng cho mượn ({len(available_assets)} tài sản):")
                 for name in asset_names:
                     context_parts.append(f"  • {name}")
@@ -247,23 +247,14 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
             don_dang_muon = DonMuon.search_count([('trang_thai', '=', 'dang_muon')])
             context_parts.append(f"📝 Đơn mượn: {don_cho_duyet} chờ duyệt, {don_dang_muon} đang mượn")
             
-            # Thông tin bảo hành tài sản của nhân viên (nếu có)
+            # Thông tin tài sản được phân bổ cho nhân viên
             if nhan_vien and intent in ['bao_hanh', 'general']:
-                ts_phan_bo = PhanBo.search([('nhan_vien_id', '=', nhan_vien.id)])
+                ts_phan_bo = PhanBo.search([('nhan_vien_su_dung_id', '=', nhan_vien.id)])
                 if ts_phan_bo:
-                    context_parts.append(f"🔧 Tài sản được phân bổ cho {nhan_vien.name}:")
+                    context_parts.append(f"🔧 Tài sản được phân bổ cho {nhan_vien.ho_ten}:")
                     for pb in ts_phan_bo[:5]:
                         asset = pb.tai_san_id
-                        warranty_info = ""
-                        if asset.ngay_het_bao_hanh:
-                            remaining = (asset.ngay_het_bao_hanh - fields.Date.today()).days
-                            if remaining > 0:
-                                warranty_info = f"✅ Còn bảo hành {remaining} ngày"
-                            else:
-                                warranty_info = "❌ Hết bảo hành"
-                        else:
-                            warranty_info = "Không có thông tin bảo hành"
-                        context_parts.append(f"  • {asset.ten_tai_san}: {warranty_info}")
+                        context_parts.append(f"  • {asset.ten_tai_san}")
             
             # Đơn mượn của nhân viên hiện tại
             if nhan_vien:
@@ -475,35 +466,31 @@ Vui lòng liên hệ quản trị viên để biết thêm chi tiết."""
         
         if user_employee:
             allocations = self.env['phan_bo_tai_san'].search([
-                ('nhan_vien_id', '=', user_employee.id)
+                ('nhan_vien_su_dung_id', '=', user_employee.id)
             ])
             
             if allocations:
-                warranty_info = []
+                asset_info = []
                 for alloc in allocations:
                     asset = alloc.tai_san_id
-                    if asset.ngay_het_bao_hanh:
-                        remaining = (asset.ngay_het_bao_hanh - fields.Date.today()).days
-                        if remaining > 0:
-                            status = f"✅ Còn {remaining} ngày"
-                        else:
-                            status = "❌ Đã hết hạn"
-                        warranty_info.append(f"• **{asset.ten_tai_san}**: {status}")
+                    # Field ngay_het_bao_hanh không tồn tại - hiển thị thông tin cơ bản
+                    asset_info.append(
+                        f"• **{asset.ten_tai_san}** - "
+                        f"Giá trị: {asset.gia_tri_hien_tai:,.0f} VNĐ"
+                    )
                 
-                if warranty_info:
-                    response = f"""🔧 **Thông tin bảo hành tài sản của bạn:**
+                if asset_info:
+                    response = f"""🔧 **Tài sản được phân bổ cho bạn:**
 
-{chr(10).join(warranty_info)}
+{chr(10).join(asset_info)}
 
-💡 *Nếu tài sản gặp sự cố trong thời gian bảo hành, vui lòng liên hệ phòng CNTT.*"""
+💡 *Nếu tài sản gặp sự cố, vui lòng liên hệ phòng kỹ thuật.*"""
                 else:
-                    response = "ℹ️ Các tài sản của bạn chưa có thông tin bảo hành."
+                    response = "ℹ️ Các tài sản của bạn chưa có thông tin."
             else:
                 response = "ℹ️ Bạn chưa được phân bổ tài sản nào."
         else:
-            response = """ℹ️ Không tìm thấy thông tin nhân viên của bạn.
-
-Vui lòng liên hệ quản trị viên để được hỗ trợ."""
+            response = "ℹ️ Không tìm thấy thông tin nhân viên của bạn.\n\nVui lòng liên hệ quản trị viên để được hỗ trợ."
 
         return {
             'answer': response,
