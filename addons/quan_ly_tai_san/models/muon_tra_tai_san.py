@@ -189,7 +189,10 @@ class MuonTraTaiSan(models.Model):
     def create(self, vals):
         # Tạo mã phiếu tự động
         if vals.get('ma_phieu_muon_tra', 'New') == 'New':
-            vals['ma_phieu_muon_tra'] = self.env['ir.sequence'].next_by_code('muon_tra_tai_san') or 'MTTS-' + fields.Date.today().strftime('%Y%m%d%H%M')
+            vals['ma_phieu_muon_tra'] = (
+                self.env['ir.sequence'].next_by_code('muon_tra_tai_san')
+                or 'MTTS-' + fields.Datetime.now().strftime('%Y%m%d%H%M%S')
+            )
         
         record = super(MuonTraTaiSan, self).create(vals)
         record.message_post(body=_('📋 Yêu cầu mượn tài sản đã được tạo, chờ duyệt.'))
@@ -211,9 +214,9 @@ class MuonTraTaiSan(models.Model):
                 'ngay_duyet': fields.Datetime.now(),
             })
             
-            # Cập nhật trạng thái đơn mượn gốc nếu có
+            # Cập nhật trạng thái đơn mượn gốc (Mức 2 - đồng bộ tự động)
             if record.ma_don_muon_id:
-                record.ma_don_muon_id.write({'trang_thai': 'da_duyet'})
+                record.ma_don_muon_id.sync_from_muon_tra_approved(record)
             
             record.message_post(body=_('✅ Đơn mượn đã được duyệt bởi %s.') % self.env.user.name)
     
@@ -235,6 +238,7 @@ class MuonTraTaiSan(models.Model):
     def action_xac_nhan_tu_choi(self, ly_do):
         """Xác nhận từ chối với lý do"""
         for record in self:
+            record._release_phan_bo_assets()
             record.write({
                 'trang_thai': 'tu_choi',
                 'nguoi_duyet_id': self.env.user.id,
@@ -242,14 +246,44 @@ class MuonTraTaiSan(models.Model):
                 'ly_do_tu_choi': ly_do,
             })
             
-            # Cập nhật trạng thái đơn mượn gốc nếu có
+            # Cập nhật trạng thái đơn mượn gốc (Mức 2 - đồng bộ tự động)
             if record.ma_don_muon_id:
-                record.ma_don_muon_id.write({
-                    'trang_thai': 'tu_choi',
-                    'ly_do_tu_choi': ly_do,
-                })
+                record.ma_don_muon_id.sync_from_muon_tra_rejected(record)
             
             record.message_post(body=_('❌ Đơn mượn đã bị từ chối. Lý do: %s') % ly_do)
+
+    def _release_phan_bo_assets(self):
+        """Trả tình trạng phân bổ về bình thường khi hủy/từ chối phiếu."""
+        for record in self:
+            for line in record.muon_tra_line_ids:
+                pb = line.phan_bo_tai_san_id
+                if pb and pb.tinh_trang == 'dang_muon':
+                    pb.sudo().write({'tinh_trang': 'binh_thuong'})
+
+    def _ensure_muon_tra_lines(self):
+        """Tạo lại dòng phiếu từ đơn gốc nếu bị xóa nhầm."""
+        for record in self:
+            if record.muon_tra_line_ids or not record.ma_don_muon_id:
+                continue
+            line_cmds = []
+            for dm_line in record.ma_don_muon_id.don_muon_tai_san_ids:
+                if dm_line.phan_bo_tai_san_id:
+                    line_cmds.append((0, 0, {
+                        'phan_bo_tai_san_id': dm_line.phan_bo_tai_san_id.id,
+                        'ghi_chu': dm_line.ghi_chu or '',
+                    }))
+            if line_cmds:
+                record.write({'muon_tra_line_ids': line_cmds})
+
+    def unlink(self):
+        for record in self:
+            if record.trang_thai in ('dang_muon', 'qua_han'):
+                raise UserError(_(
+                    'Không thể xóa phiếu đang mượn hoặc quá hạn.\n'
+                    'Vui lòng dùng "Xác nhận đã nhận trả" để hoàn tất trước.'
+                ))
+            record._release_phan_bo_assets()
+        return super(MuonTraTaiSan, self).unlink()
     
     # ============ ACTION METHODS - CHO MƯỢN ============
     def action_xac_nhan_cho_muon(self):
@@ -270,13 +304,14 @@ class MuonTraTaiSan(models.Model):
                 if line.phan_bo_tai_san_id:
                     line.phan_bo_tai_san_id.sudo().write({'tinh_trang': 'dang_muon'})
             
-            # Cập nhật trạng thái đơn mượn gốc nếu có
+            # Cập nhật trạng thái đơn mượn gốc (Mức 2 - đồng bộ tự động)
             if record.ma_don_muon_id:
-                record.ma_don_muon_id.write({'trang_thai': 'dang_muon'})
+                record.ma_don_muon_id.sync_from_muon_tra_borrowed(record)
             
+            nv_ten = record.nhan_vien_muon_id.ho_ten if record.nhan_vien_muon_id else _('N/A')
             record.message_post(body=_('📦 Tài sản đã được giao cho %s lúc %s bởi %s.') % (
-                record.nhan_vien_muon_id.name, 
-                now.strftime('%d/%m/%Y %H:%M'), 
+                nv_ten,
+                now.strftime('%d/%m/%Y %H:%M'),
                 self.env.user.name
             ))
     
@@ -286,6 +321,12 @@ class MuonTraTaiSan(models.Model):
         self.ensure_one()
         if self.trang_thai not in ['dang_muon', 'qua_han']:
             raise UserError(_('Chỉ có thể xác nhận trả cho đơn đang mượn!'))
+        self._ensure_muon_tra_lines()
+        if not self.muon_tra_line_ids:
+            raise UserError(_(
+                'Phiếu không có dòng tài sản để trả.\n'
+                'Nếu đơn gốc còn tồn tại, liên hệ quản trị chạy script sửa dữ liệu.'
+            ))
         
         return {
             'name': 'Xác nhận trả tài sản',
@@ -322,9 +363,9 @@ class MuonTraTaiSan(models.Model):
                         'ngay_tra': now
                     })
             
-            # Cập nhật trạng thái đơn mượn gốc nếu có
+            # Cập nhật trạng thái đơn mượn gốc (Mức 2 - đồng bộ tự động)
             if record.ma_don_muon_id:
-                record.ma_don_muon_id.write({'trang_thai': 'da_tra'})
+                record.ma_don_muon_id.sync_from_muon_tra_returned(record)
             
             record.message_post(body=_('✅ Tài sản đã được trả lúc %s. Người nhận: %s.') % (
                 now.strftime('%d/%m/%Y %H:%M'), self.env.user.name))

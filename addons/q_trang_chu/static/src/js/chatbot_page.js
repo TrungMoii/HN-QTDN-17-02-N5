@@ -2,9 +2,7 @@
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-
-const { Component, useState, hooks } = owl;
-const { onMounted } = hooks;
+import { Component, useState, onMounted } from "@odoo/owl";
 
 const actionRegistry = registry.category("actions");
 

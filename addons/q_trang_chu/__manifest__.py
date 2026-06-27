@@ -24,14 +24,20 @@
         'base',
         'web',
         'mail',
+        'nhan_su',
         'quan_ly_tai_san',
         'quan_ly_tai_chinh',
     ],
+
+    'external_dependencies': {
+        'python': ['requests'],
+    },
 
     # Data files
     # Cải tiến từ phiên bản cũ: Sắp xếp lại thứ tự load - views trước, menu sau
     'data': [
         'security/ir.model.access.csv',
+        'security/chatbot_security.xml',
         'data/chatbot_knowledge_data.xml',
         'views/dashboard_views.xml',  # Load views và actions trước
         'views/chatbot_views.xml',     # Load tất cả views và actions
@@ -44,16 +50,15 @@
             # CSS
             'q_trang_chu/static/src/css/dashboard.css',
             'q_trang_chu/static/src/css/chatbot.css',
-            'q_trang_chu/static/src/css/messenger_chat.css',
             'q_trang_chu/static/src/css/chatbot_page.css',
-            # JS
+            # JS - một widget chatbot duy nhất + trang chatbot đầy đủ
             'q_trang_chu/static/src/js/dashboard.js',
-            'q_trang_chu/static/src/js/messenger_chat.js',
             'q_trang_chu/static/src/js/chatbot_widget.js',
+            'q_trang_chu/static/src/js/chatbot_page.js',
         ],
         'web.assets_qweb': [
             'q_trang_chu/static/src/xml/dashboard_templates.xml',
-            'q_trang_chu/static/src/xml/messenger_chat.xml',
+            'q_trang_chu/static/src/xml/chatbot_templates.xml',
             'q_trang_chu/static/src/xml/chatbot_page.xml',
         ],
     },

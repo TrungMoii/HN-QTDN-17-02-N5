@@ -60,6 +60,8 @@
                 <search string="Tìm kiếm phân bổ tài sản">
                     <field name="phong_ban_id" string="Phòng ban"/>
                     <field name="tai_san_id" string="Tài sản"/>
+                    <field name="tai_san_id" string="Mã TS"
+                        filter_domain="[('tai_san_id.ma_tai_san', 'ilike', self)]"/>
                     <field name="ngay_phat" string="Ngày phát"/>
                     <field name="trang_thai" string="Trạng thái"/>
                     <field name="vi_tri_tai_san_id" string="Vị trí"/>

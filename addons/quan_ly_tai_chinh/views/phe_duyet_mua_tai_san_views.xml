@@ -97,6 +97,13 @@
                             <field name="tong_gia_tri" readonly="1"/>
                         </group>
                         <group string="Tài khoản kế toán" states="draft">
+                            <div class="alert alert-warning" role="alert" colspan="2">
+                                <strong>3 bước:</strong>
+                                (1) Chọn 211, 112, <em>Nhật ký chung</em>
+                                → (2) <strong>Lưu</strong>
+                                → (3) <strong>Phê duyệt</strong>.
+                                Không dùng sổ "Hóa đơn mua hàng" nếu không chắc.
+                            </div>
                             <field name="tk_tai_san_id" required="1"
                                    options="{'no_create': True, 'no_open': True}"/>
                             <field name="tk_nguon_von_id" required="1"

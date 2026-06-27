@@ -9,14 +9,19 @@ odoo.define('quan_ly_tai_san.dashboard_borrowing', function (require) {
 
     var DashboardBorrowingController = FormController.extend({
         start: function () {
-            this._super.apply(this, arguments);
-            this.$el.addClass('o_dashboard_view');
+            var self = this;
+            return this._super.apply(this, arguments).then(function () {
+                self.$el.addClass('o_dashboard_view');
+                if (self.dashboardData) {
+                    self._updateDashboard();
+                }
+            });
         },
         willStart: function () {
-            return Promise.all([
-                this._super.apply(this, arguments),
-                this._loadDashboardData()
-            ]);
+            var self = this;
+            return this._super.apply(this, arguments).then(function () {
+                return self._loadDashboardData();
+            });
         },
         _loadDashboardData: function () {
             const self = this;

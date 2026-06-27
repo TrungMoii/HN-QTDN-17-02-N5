@@ -62,9 +62,24 @@ class PhanBoTaiSan(models.Model):
     @api.depends('phong_ban_id', 'tai_san_id')
     def _compute_custom_name(self):
         for record in self:
-            phong_ban_code = record.tai_san_id.ma_tai_san or 'Mã phòng ban không xác định'
+            phong_ban_code = (
+                record.phong_ban_id.ma_phong_ban
+                if record.phong_ban_id else (record.tai_san_id.ma_tai_san or 'N/A')
+            )
             tai_san_name = record.tai_san_id.ten_tai_san or 'Tài sản không xác định'
             record.custom_name = f"{phong_ban_code} - {tai_san_name}"
+
+    def name_get(self):
+        result = []
+        for record in self:
+            ma = record.tai_san_id.ma_tai_san or ''
+            ten = record.tai_san_id.ten_tai_san or record.custom_name or ''
+            pb = record.phong_ban_id.ma_phong_ban or ''
+            label = f"{ma} — {ten}" if ma else ten
+            if pb:
+                label = f"[{pb}] {label}"
+            result.append((record.id, label))
+        return result
 
     # ================================================================
     # Cải tiến từ phiên bản cũ: Thêm @api.onchange để khi người dùng
@@ -73,18 +88,9 @@ class PhanBoTaiSan(models.Model):
     # ================================================================
     @api.onchange('nhan_vien_su_dung_id')
     def _onchange_nhan_vien_su_dung_id(self):
-        """Tự động điền phòng ban từ nhân viên được chọn (đồng bộ HRM)."""
+        """Tự động điền phòng ban từ HRM (Single Source of Truth)."""
         if self.nhan_vien_su_dung_id:
-            # Lấy phòng ban hiện tại của nhân viên qua lịch sử công tác
-            nv = self.nhan_vien_su_dung_id
-            phong_ban = False
-            if nv.lich_su_cong_tac_ids:
-                latest = nv.lich_su_cong_tac_ids.sorted(
-                    key=lambda r: r.time_start, reverse=True
-                )
-                if latest:
-                    phong_ban = latest[0].phong_ban_id
-            # Chỉ gán khi phong_ban tồn tại và có id (tránh _unknown)
-            if phong_ban and phong_ban.id:
-                self.phong_ban_id = phong_ban.id
-                self.vi_tri_tai_san_id = phong_ban.id
+            pb = self.nhan_vien_su_dung_id.phong_ban_hien_tai_id
+            if pb:
+                self.phong_ban_id = pb
+                self.vi_tri_tai_san_id = pb

@@ -13,6 +13,7 @@ import json
 class BaoCaoTaiChinh(models.Model):
     _name = 'bao_cao_tai_chinh'
     _description = 'Báo cáo tài chính'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'name'
     _order = 'nam desc, thang desc'
 

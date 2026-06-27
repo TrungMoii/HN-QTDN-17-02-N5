@@ -186,6 +186,7 @@ class TaiSan(models.Model):
             })
 
             record.thoi_gian_su_dung += 1
+            record.write({'thoi_gian_su_dung': record.thoi_gian_su_dung})
 
             self.env['bus.bus']._sendone(
                 self.env.user.partner_id,

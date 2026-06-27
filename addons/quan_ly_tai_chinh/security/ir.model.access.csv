@@ -1,5 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-khau_hao_tai_san_user,khau_hao_tai_san.user,model_khau_hao_tai_san,base.group_user,1,0,0,0
+khau_hao_tai_san_user,khau_hao_tai_san.user,model_khau_hao_tai_san,base.group_user,1,1,1,0
 khau_hao_tai_san_admin,khau_hao_tai_san.manager,model_khau_hao_tai_san,base.group_system,1,1,1,1
 but_toan_user,but_toan.user,model_but_toan,base.group_user,1,0,0,0
 but_toan_admin,but_toan.manager,model_but_toan,base.group_system,1,1,1,1

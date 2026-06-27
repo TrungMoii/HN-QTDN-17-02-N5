@@ -157,6 +157,10 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
         # Tạo hoặc lấy conversation
         if conversation_id:
             conversation = self.env['chatbot.conversation'].browse(conversation_id)
+            if not conversation or conversation.user_id != self.env.user:
+                conversation = self.env['chatbot.conversation'].create({
+                    'user_id': self.env.user.id,
+                })
         else:
             conversation = self.env['chatbot.conversation'].create({
                 'user_id': self.env.user.id,
@@ -181,8 +185,8 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
         
         # Thử gọi Gemini API nếu được bật
         gemini_response = None
-        if use_gemini:
-            gemini_response = self._call_gemini_api(message, context)
+        if use_gemini and assistant:
+            gemini_response = assistant._call_gemini_api(message, context)
         
         if gemini_response:
             response = {
@@ -234,7 +238,10 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
             
             # Tài sản có thể mượn (liệt kê tên cụ thể)
             PhanBo = self.env['phan_bo_tai_san']
-            available_assets = PhanBo.search([('tinh_trang', '=', 'binh_thuong')], limit=10)
+            available_assets = PhanBo.search([
+                ('tinh_trang', '=', 'binh_thuong'),
+                ('trang_thai', '=', 'in-use'),
+            ], limit=10)
             if available_assets:
                 asset_names = [f"{a.tai_san_id.ten_tai_san} ({a.phong_ban_id.ten_phong_ban if a.phong_ban_id else 'N/A'})" for a in available_assets[:5]]
                 context_parts.append(f"📦 Tài sản sẵn sàng cho mượn ({len(available_assets)} tài sản):")
@@ -319,7 +326,7 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
             'thong_ke': [{
                 'type': 'link',
                 'label': '📈 Xem Dashboard',
-                'action': 'q_trang_chu.action_dashboard',
+                'action': 'q_trang_chu.action_dashboard_main',
             }],
         }
         return actions_map.get(intent, [])
@@ -591,7 +598,7 @@ Vui lòng liên hệ quản trị viên để biết thêm chi tiết."""
                 {
                     'type': 'link',
                     'label': '📈 Xem Dashboard',
-                    'action': 'q_trang_chu.action_dashboard',
+                    'action': 'q_trang_chu.action_dashboard_main',
                 }
             ],
         }

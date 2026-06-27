@@ -86,7 +86,23 @@ class DeXuatMuaTaiSan(models.Model):
             vals['ma_de_xuat'] = (
                 self.env['ir.sequence'].next_by_code('de_xuat_mua_tai_san') or 'New'
             )
+        if not vals.get('phong_ban_id') and vals.get('nguoi_de_xuat_id'):
+            nv = self.env['nhan_vien'].search([
+                ('user_id', '=', vals['nguoi_de_xuat_id']),
+            ], limit=1)
+            if nv and nv.phong_ban_hien_tai_id:
+                vals['phong_ban_id'] = nv.phong_ban_hien_tai_id.id
         return super().create(vals)
+
+    @api.onchange('nguoi_de_xuat_id')
+    def _onchange_nguoi_de_xuat_id(self):
+        """Tự động điền phòng ban từ HRM (Single Source of Truth)."""
+        if self.nguoi_de_xuat_id:
+            nv = self.env['nhan_vien'].search([
+                ('user_id', '=', self.nguoi_de_xuat_id.id),
+            ], limit=1)
+            if nv and nv.phong_ban_hien_tai_id:
+                self.phong_ban_id = nv.phong_ban_hien_tai_id
 
     def write(self, vals):
         """Ngăn thay đổi state sang approved/rejected trực tiếp"""
@@ -102,6 +118,10 @@ class DeXuatMuaTaiSan(models.Model):
     def action_submit(self):
         """Gửi đề xuất và tạo đơn phê duyệt ở module tài chính"""
         for record in self:
+            if record.state != 'draft':
+                raise UserError(_('Chỉ có thể gửi đề xuất ở trạng thái Nháp!'))
+            if record.phe_duyet_id:
+                raise UserError(_('Đề xuất đã có đơn phê duyệt liên kết!'))
             if not record.line_ids:
                 raise UserError(_('Vui lòng thêm ít nhất một thiết bị.'))
             for line in record.line_ids:
@@ -112,7 +132,13 @@ class DeXuatMuaTaiSan(models.Model):
             if record.tong_gia_tri <= 0:
                 raise UserError(_('Tổng giá trị phải lớn hơn 0.'))
 
-            record.state = 'submitted'
+            if not record.phong_ban_id and record.nguoi_de_xuat_id:
+                nv = self.env['nhan_vien'].search([
+                    ('user_id', '=', record.nguoi_de_xuat_id.id),
+                ], limit=1)
+                if nv and nv.phong_ban_hien_tai_id:
+                    record.phong_ban_id = nv.phong_ban_hien_tai_id
+
             record._create_approval_request()
             record.state = 'waiting_approval'
             record.message_post(body=_('Đề xuất đã được gửi và tạo đơn phê duyệt tài chính.'))

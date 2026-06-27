@@ -1,7 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_danh_muc_tai_san_user,danh_muc_tai_san.user,model_danh_muc_tai_san,base.group_user,1,0,0,0
+access_danh_muc_tai_san_user,danh_muc_tai_san.user,model_danh_muc_tai_san,base.group_user,1,1,1,0
 access_danh_muc_tai_san_manager,danh_muc_tai_san.manager,model_danh_muc_tai_san,base.group_system,1,1,1,1
-access_tai_san_user,tai_san.user,model_tai_san,base.group_user,1,0,0,0
+access_tai_san_user,tai_san.user,model_tai_san,base.group_user,1,1,1,0
 access_tai_san_manager,tai_san.manager,model_tai_san,base.group_system,1,1,1,1
 access_kiem_ke_tai_san_line_user,kiem_ke_tai_san_line.user,model_kiem_ke_tai_san_line,base.group_user,1,1,1,0
 access_kiem_ke_tai_san_line_manager,kiem_ke_tai_san_line.manager,model_kiem_ke_tai_san_line,base.group_system,1,1,1,1

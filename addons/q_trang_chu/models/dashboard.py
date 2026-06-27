@@ -38,7 +38,7 @@ class DashboardMain(models.TransientModel):
 
         if 'active_tai_san' in fields_list:
             res['active_tai_san'] = TaiSan.search_count([
-                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo', 'chua_thanh_ly'])
+                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo'])
             ])
 
         if 'total_value' in fields_list:
@@ -53,14 +53,11 @@ class DashboardMain(models.TransientModel):
             if 'don_cho_duyet' in fields_list:
                 res['don_cho_duyet'] = DonMuon.search_count([('trang_thai', '=', 'cho_duyet')])
             if 'dang_muon' in fields_list:
-                res['dang_muon'] = DonMuon.search_count([('trang_thai', '=', 'da_duyet')])
+                res['dang_muon'] = DonMuon.search_count([('trang_thai', '=', 'dang_muon')])
 
             MuonTra = self.env['muon_tra_tai_san']
             if 'qua_han' in fields_list:
-                res['qua_han'] = MuonTra.search_count([
-                    ('trang_thai', '=', 'dang_muon'),
-                    ('thoi_gian_tra_du_kien', '<', fields.Datetime.now())
-                ])
+                res['qua_han'] = MuonTra.search_count([('trang_thai', '=', 'qua_han')])
         except Exception as e:
             _logger.warning("Error computing muon_tra stats in default_get: %s", e)
             for f in ['don_cho_duyet', 'dang_muon', 'qua_han']:
@@ -115,7 +112,10 @@ class DashboardMain(models.TransientModel):
                     'nhap': ('Nháp', 'secondary'),
                     'cho_duyet': ('Chờ duyệt', 'warning'),
                     'da_duyet': ('Đã duyệt', 'success'),
+                    'dang_muon': ('Đang mượn', 'warning'),
+                    'da_tra': ('Đã trả', 'success'),
                     'tu_choi': ('Từ chối', 'danger'),
+                    'huy': ('Đã hủy', 'secondary'),
                 }
                 for don in recent_don:
                     status = trang_thai_map.get(don.trang_thai, ('', 'secondary'))
@@ -164,7 +164,7 @@ class DashboardMain(models.TransientModel):
             TaiSan = self.env['tai_san']
             record.total_tai_san = TaiSan.search_count([])
             record.active_tai_san = TaiSan.search_count([
-                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo', 'chua_thanh_ly'])
+                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo'])
             ])
             tai_san_list = TaiSan.search([])
             record.total_value = sum(
@@ -173,11 +173,10 @@ class DashboardMain(models.TransientModel):
             try:
                 DonMuon = self.env['don_muon_tai_san']
                 record.don_cho_duyet = DonMuon.search_count([('trang_thai', '=', 'cho_duyet')])
-                record.dang_muon = DonMuon.search_count([('trang_thai', '=', 'da_duyet')])
+                record.dang_muon = DonMuon.search_count([('trang_thai', '=', 'dang_muon')])
                 MuonTra = self.env['muon_tra_tai_san']
                 record.qua_han = MuonTra.search_count([
-                    ('trang_thai', '=', 'dang_muon'),
-                    ('thoi_gian_tra_du_kien', '<', fields.Datetime.now())
+                    ('trang_thai', '=', 'qua_han'),
                 ])
             except Exception as e:
                 _logger.warning("Error computing stats: %s", e)
@@ -235,7 +234,10 @@ class DashboardMain(models.TransientModel):
                     'nhap': ('Nháp', 'secondary'),
                     'cho_duyet': ('Chờ duyệt', 'warning'),
                     'da_duyet': ('Đã duyệt', 'success'),
+                    'dang_muon': ('Đang mượn', 'warning'),
+                    'da_tra': ('Đã trả', 'success'),
                     'tu_choi': ('Từ chối', 'danger'),
+                    'huy': ('Đã hủy', 'secondary'),
                 }
                 for don in recent_don:
                     status = trang_thai_map.get(don.trang_thai, ('', 'secondary'))
@@ -312,7 +314,7 @@ class DashboardMain(models.TransientModel):
             TaiSan = self.env['tai_san']
             total_tai_san = TaiSan.search_count([])
             active_tai_san = TaiSan.search_count([
-                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo', 'chua_thanh_ly'])
+                ('trang_thai_thanh_ly', 'in', ['da_phan_bo', 'chua_phan_bo'])
             ])
             tai_san_list = TaiSan.search([])
             total_value = sum(ts.gia_tri_hien_tai or ts.gia_tri_ban_dau or 0 for ts in tai_san_list)
@@ -332,10 +334,9 @@ class DashboardMain(models.TransientModel):
             try:
                 DonMuon = self.env['don_muon_tai_san']
                 don_cho_duyet = DonMuon.search_count([('trang_thai', '=', 'cho_duyet')])
-                dang_muon = DonMuon.search_count([('trang_thai', '=', 'da_duyet')])
+                dang_muon = DonMuon.search_count([('trang_thai', '=', 'dang_muon')])
                 qua_han = self.env['muon_tra_tai_san'].search_count([
-                    ('trang_thai', '=', 'dang_muon'),
-                    ('thoi_gian_tra_du_kien', '<', fields.Datetime.now())
+                    ('trang_thai', '=', 'qua_han'),
                 ])
             except Exception as e:
                 _logger.warning("Error computing muon_tra stats: %s", e)
@@ -357,7 +358,9 @@ class DashboardMain(models.TransientModel):
                 recent_don = DonMuon.search([], limit=5, order='create_date desc')
                 trang_thai_map = {
                     'nhap': ('Nháp', 'secondary'), 'cho_duyet': ('Chờ duyệt', 'warning'),
-                    'da_duyet': ('Đã duyệt', 'success'), 'tu_choi': ('Từ chối', 'danger'),
+                    'da_duyet': ('Đã duyệt', 'success'), 'dang_muon': ('Đang mượn', 'warning'),
+                    'da_tra': ('Đã trả', 'success'), 'tu_choi': ('Từ chối', 'danger'),
+                    'huy': ('Đã hủy', 'secondary'),
                 }
                 for don in recent_don:
                     status = trang_thai_map.get(don.trang_thai, ('', 'secondary'))

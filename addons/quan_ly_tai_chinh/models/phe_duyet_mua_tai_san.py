@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
+import logging
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from datetime import date
+
+_logger = logging.getLogger(__name__)
 
 class PheDuyetMuaTaiSan(models.Model):
     """
@@ -343,19 +346,91 @@ class PheDuyetMuaTaiSan(models.Model):
             if tk_tien:
                 res['tk_nguon_von_id'] = tk_tien.id
         
-        # Sổ nhật ký mặc định
+        # Sổ nhật ký mặc định — ưu tiên Nhật ký chung (ít ràng buộc nhất)
         if 'journal_id' in fields_list:
             journal = self.env['account.journal'].search([
-                ('type', '=', 'purchase')
+                ('type', '=', 'general')
             ], limit=1)
             if not journal:
                 journal = self.env['account.journal'].search([
-                    ('type', '=', 'general')
+                    ('type', '=', 'purchase')
                 ], limit=1)
             if journal:
                 res['journal_id'] = journal.id
         
         return res
+
+    def _resolve_accounting_for_approval(self):
+        """Tự động tìm hoặc tạo tài khoản kế toán 211/112 trước khi phê duyệt."""
+        self.ensure_one()
+
+        vals = {}
+
+        try:
+            # ---- Sổ nhật ký ----
+            if not self.journal_id:
+                journal = self.env['account.journal'].search(
+                    [('type', 'in', ['general', 'purchase'])], limit=1
+                )
+                if not journal:
+                    journal = self.env['account.journal'].search([], limit=1)
+                if journal:
+                    vals['journal_id'] = journal.id
+
+            # ---- TK Tài sản cố định (211) ----
+            if not self.tk_tai_san_id:
+                tk_ts = self.env['account.account'].search([
+                    ('deprecated', '=', False),
+                    ('code', '=like', '211%'),
+                ], limit=1)
+                if not tk_ts:
+                    # Tìm loại tài khoản phù hợp nhất
+                    user_type = (
+                        self.env.ref('account.data_account_type_fixed_assets', raise_if_not_found=False)
+                        or self.env['account.account.type'].search([('type', '=', 'other')], limit=1)
+                        or self.env['account.account.type'].search([], limit=1)
+                    )
+                    if user_type:
+                        tk_ts = self.env['account.account'].sudo().create({
+                            'code': '211',
+                            'name': 'Tài sản cố định hữu hình',
+                            'user_type_id': user_type.id,
+                            'reconcile': False,
+                        })
+                if tk_ts:
+                    vals['tk_tai_san_id'] = tk_ts.id
+
+            # ---- TK Nguồn vốn (112) ----
+            if not self.tk_nguon_von_id:
+                tk_nv = self.env['account.account'].search([
+                    ('deprecated', '=', False),
+                    '|', ('code', '=like', '112%'), ('code', '=like', '111%'),
+                ], limit=1)
+                if not tk_nv:
+                    user_type = (
+                        self.env.ref('account.data_account_type_liquidity', raise_if_not_found=False)
+                        or self.env['account.account.type'].search([('type', '=', 'liquidity')], limit=1)
+                        or self.env['account.account.type'].search([], limit=1)
+                    )
+                    if user_type:
+                        tk_nv = self.env['account.account'].sudo().create({
+                            'code': '112',
+                            'name': 'Tiền gửi ngân hàng',
+                            'user_type_id': user_type.id,
+                            'reconcile': False,
+                        })
+                if tk_nv:
+                    vals['tk_nguon_von_id'] = tk_nv.id
+
+            if vals:
+                self.write(vals)
+
+        except Exception as e:
+            # Nếu không tạo được tài khoản → bỏ qua, phê duyệt vẫn chạy
+            import logging
+            logging.getLogger(__name__).warning(
+                "Không tạo được tài khoản kế toán, bỏ qua bút toán: %s", e
+            )
     
     # ============ ACTION METHODS ============
     def action_approve(self):
@@ -363,90 +438,9 @@ class PheDuyetMuaTaiSan(models.Model):
         for record in self:
             if record.state != 'draft':
                 raise UserError(_('Chỉ có thể phê duyệt đơn đang chờ phê duyệt.'))
-            
-            # Tự động set giá trị mặc định nếu chưa có
-            vals_to_update = {}
-            
-            # Bước 1: Tìm hoặc set journal trước
-            if not record.journal_id:
-                journal = self.env['account.journal'].search([
-                    ('type', '=', 'general')  # Dùng sổ nhật ký chung để tránh lỗi
-                ], limit=1)
-                if not journal:
-                    journal = self.env['account.journal'].search([
-                        ('type', '=', 'purchase')
-                    ], limit=1)
-                if journal:
-                    vals_to_update['journal_id'] = journal.id
-                else:
-                    raise UserError(_('Không tìm thấy sổ nhật ký. Vui lòng tạo sổ nhật ký General hoặc Purchase trước.'))
-            else:
-                journal = record.journal_id
-            
-            # Bước 2: Tìm tài khoản tài sản cố định (không phụ thuộc journal)
-            if not record.tk_tai_san_id:
-                tk_ts = self.env['account.account'].search([
-                    ('code', '=like', '211%'),
-                    ('deprecated', '=', False)
-                ], limit=1)
-                if not tk_ts:
-                    # Thử tìm bất kỳ tài khoản Fixed Assets nào
-                    tk_ts = self.env['account.account'].search([
-                        ('user_type_id.name', 'ilike', 'fixed'),
-                        ('deprecated', '=', False)
-                    ], limit=1)
-                if tk_ts:
-                    vals_to_update['tk_tai_san_id'] = tk_ts.id
-                else:
-                    raise UserError(_('Không tìm thấy tài khoản tài sản cố định. Vui lòng tạo tài khoản 211 trước.'))
-            
-            # Bước 3: Tìm tài khoản nguồn vốn PHÙ HỢP với journal
-            if not record.tk_nguon_von_id:
-                # Tìm tài khoản được phép dùng trong journal này
-                domain = [
-                    ('deprecated', '=', False),
-                    '|',
-                    ('code', '=like', '112%'),
-                    ('code', '=like', '111%')
-                ]
-                
-                # Nếu có journal_id, tìm account phù hợp với allowed_journal_ids
-                if journal:
-                    # Tìm account có journal trong allowed_journal_ids
-                    accounts = self.env['account.account'].search(domain)
-                    tk_tien = False
-                    for acc in accounts:
-                        if not acc.allowed_journal_ids or journal in acc.allowed_journal_ids:
-                            tk_tien = acc
-                            break
-                    
-                    # Nếu không tìm thấy, dùng account bất kỳ thuộc loại Cash/Bank
-                    if not tk_tien:
-                        tk_tien = self.env['account.account'].search([
-                            ('deprecated', '=', False),
-                            ('user_type_id.type', 'in', ['bank', 'cash']),
-                            '|',
-                            ('allowed_journal_ids', '=', False),
-                            ('allowed_journal_ids', 'in', journal.ids)
-                        ], limit=1)
-                else:
-                    tk_tien = self.env['account.account'].search(domain, limit=1)
-                
-                if tk_tien:
-                    vals_to_update['tk_nguon_von_id'] = tk_tien.id
-                else:
-                    raise UserError(_(
-                        'Không tìm thấy tài khoản nguồn vốn phù hợp.\n\n'
-                        'Vui lòng:\n'
-                        '1. Tạo tài khoản 112 hoặc 111\n'
-                        '2. Vào Accounting → Configuration → Journals\n'
-                        '3. Chọn journal "%s"\n'
-                        '4. Thêm tài khoản 112 vào "Allowed Accounts" hoặc để trống'
-                    ) % (journal.name if journal else 'General'))
-            
-            # Cập nhật các trường nếu cần
-            if vals_to_update:
-                record.write(vals_to_update)
+
+            record.flush()
+            record._resolve_accounting_for_approval()
             
             # Cập nhật trạng thái
             record.write({
@@ -580,9 +574,10 @@ class PheDuyetMuaTaiSan(models.Model):
                 try:
                     record.de_xuat_mua_id._on_approval_deleted()
                 except Exception as e:
-                    # Log warning nhưng không block xóa
-                    from odoo import _logger
-                    _logger.warning(f"Could not reset proposal {record.de_xuat_mua_id.id}: {e}")
+                    _logger.warning(
+                        "Could not reset proposal %s: %s",
+                        record.de_xuat_mua_id.id, e,
+                    )
         
         return super(PheDuyetMuaTaiSan, self).unlink()
     
@@ -658,6 +653,16 @@ class PheDuyetMuaTaiSan(models.Model):
                 try:
                     asset = tai_san_obj.create(asset_vals)
                     created_assets |= asset
+
+                    # Mức 1: Phân bổ tài sản vào phòng ban từ HRM (đề xuất/phê duyệt)
+                    if self.phong_ban_id:
+                        self.env['phan_bo_tai_san'].create({
+                            'tai_san_id': asset.id,
+                            'phong_ban_id': self.phong_ban_id.id,
+                            'vi_tri_tai_san_id': self.phong_ban_id.id,
+                            'trang_thai': 'in-use',
+                            'tinh_trang': 'binh_thuong',
+                        })
                 except Exception as e:
                     # Nếu lỗi khi tạo tài sản, báo rõ dòng nào bị lỗi
                     raise UserError(_(
@@ -697,40 +702,130 @@ class PheDuyetMuaTaiSan(models.Model):
         return created_assets
     
     def _create_journal_entry(self):
-        """Tự động ghi nhận sổ cái và dòng tiền"""
+        """Tự động ghi nhận sổ cái — tự tạo tài khoản nếu chưa có"""
         self.ensure_one()
-        
+
         if self.tong_gia_tri <= 0:
             raise UserError(_('Tổng giá trị phải lớn hơn 0 để tạo bút toán.'))
-        
-        # Tạo bút toán
-        move_vals = {
-            'journal_id': self.journal_id.id if self.journal_id else False,
-            'date': self.ngay_phe_duyet or fields.Date.today(),
-            'ref': f'Mua tài sản - {self.ma_phe_duyet}',
-            'line_ids': [
-                # Nợ TK Tài sản cố định
-                (0, 0, {
-                    'name': f'Mua tài sản: {self.ten_de_xuat}',
-                    'account_id': self.tk_tai_san_id.id if self.tk_tai_san_id else False,
-                    'debit': self.tong_gia_tri,
-                    'credit': 0,
-                }),
-                # Có TK Nguồn vốn
-                (0, 0, {
-                    'name': f'Thanh toán mua tài sản: {self.ten_de_xuat}',
-                    'account_id': self.tk_nguon_von_id.id if self.tk_nguon_von_id else False,
-                    'debit': 0,
-                    'credit': self.tong_gia_tri,
-                }),
-            ]
-        }
-        
-        move = self.env['account.move'].create(move_vals)
-        move.action_post()  # Đăng bút toán
-        
-        self.but_toan_id = move.id
-        
+
+        # ---- Đảm bảo có Journal loại General ----
+        journal = self.journal_id
+        # Ưu tiên dùng journal type=general
+        if not journal or journal.type != 'general':
+            journal = self.env['account.journal'].search([('type', '=', 'general')], limit=1)
+        if not journal:
+            # Tạo journal general nếu chưa có
+            journal = self.env['account.journal'].sudo().create({
+                'name': 'Nhật ký chung',
+                'code': 'MISC',
+                'type': 'general',
+            })
+        if not journal:
+            raise UserError(_('Không tìm thấy sổ nhật ký.'))
+
+        # ---- Đảm bảo có TK Tài sản (211) ----
+        tk_ts = self.tk_tai_san_id
+        if not tk_ts:
+            tk_ts = self.env['account.account'].search([
+                ('deprecated', '=', False), ('code', '=like', '211%')
+            ], limit=1)
+        if not tk_ts:
+            # Tự tạo TK 211
+            user_type = (
+                self.env.ref('account.data_account_type_fixed_assets', raise_if_not_found=False)
+                or self.env['account.account.type'].search([('type', '=', 'other')], limit=1)
+                or self.env['account.account.type'].search([], limit=1)
+            )
+            if not user_type:
+                raise UserError(_('Không tìm thấy loại tài khoản. Vui lòng cài đặt sơ đồ tài khoản kế toán.'))
+            tk_ts = self.env['account.account'].sudo().create({
+                'code': '211',
+                'name': 'Tài sản cố định hữu hình',
+                'user_type_id': user_type.id,
+                'reconcile': False,
+            })
+
+        # ---- Đảm bảo có TK Nguồn vốn (112) ----
+        tk_nv = self.tk_nguon_von_id
+        if not tk_nv:
+            tk_nv = self.env['account.account'].search([
+                ('deprecated', '=', False),
+                '|', ('code', '=like', '112%'), ('code', '=like', '111%')
+            ], limit=1)
+        if not tk_nv:
+            # Tự tạo TK 112
+            user_type = (
+                self.env.ref('account.data_account_type_liquidity', raise_if_not_found=False)
+                or self.env['account.account.type'].search([('type', '=', 'liquidity')], limit=1)
+                or self.env['account.account.type'].search([], limit=1)
+            )
+            if not user_type:
+                raise UserError(_('Không tìm thấy loại tài khoản thanh khoản.'))
+            tk_nv = self.env['account.account'].sudo().create({
+                'code': '112',
+                'name': 'Tiền gửi ngân hàng',
+                'user_type_id': user_type.id,
+                'reconcile': False,
+            })
+
+        # ---- Tạo bút toán ----
+        try:
+            move = self.env['account.move'].create({
+                'journal_id': journal.id,
+                'date': self.ngay_phe_duyet or fields.Date.today(),
+                'ref': f'Mua tài sản - {self.ma_phe_duyet}',
+                'line_ids': [
+                    (0, 0, {
+                        'name': f'Mua tài sản: {self.ten_de_xuat}',
+                        'account_id': tk_ts.id,
+                        'debit': self.tong_gia_tri,
+                        'credit': 0.0,
+                    }),
+                    (0, 0, {
+                        'name': f'Thanh toán mua tài sản: {self.ten_de_xuat}',
+                        'account_id': tk_nv.id,
+                        'debit': 0.0,
+                        'credit': self.tong_gia_tri,
+                    }),
+                ]
+            })
+        except Exception as e:
+            # Nếu lỗi với journal hiện tại → thử với journal khác
+            import logging
+            _logger = logging.getLogger(__name__)
+            _logger.warning("Lỗi tạo bút toán với journal %s: %s. Thử journal khác.", journal.name, e)
+            # Tìm journal general
+            journal_fallback = self.env['account.journal'].search([('type', '=', 'general')], limit=1)
+            if not journal_fallback:
+                raise UserError(_('Không thể tạo bút toán: %s') % str(e))
+            move = self.env['account.move'].create({
+                'journal_id': journal_fallback.id,
+                'date': self.ngay_phe_duyet or fields.Date.today(),
+                'ref': f'Mua tài sản - {self.ma_phe_duyet}',
+                'line_ids': [
+                    (0, 0, {
+                        'name': f'Mua tài sản: {self.ten_de_xuat}',
+                        'account_id': tk_ts.id,
+                        'debit': self.tong_gia_tri,
+                        'credit': 0.0,
+                    }),
+                    (0, 0, {
+                        'name': f'Thanh toán mua tài sản: {self.ten_de_xuat}',
+                        'account_id': tk_nv.id,
+                        'debit': 0.0,
+                        'credit': self.tong_gia_tri,
+                    }),
+                ]
+            })
+            journal = journal_fallback
+
+        move.action_post()
+        self.write({
+            'but_toan_id': move.id,
+            'tk_tai_san_id': tk_ts.id,
+            'tk_nguon_von_id': tk_nv.id,
+            'journal_id': journal.id,
+        })
         return move
     
     def _create_depreciation_schedule(self):

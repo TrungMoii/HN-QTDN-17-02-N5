@@ -49,11 +49,33 @@ class DonMuonTaiSan(models.Model):
         ondelete='restrict',
         tracking=True
     )
+    phong_ban_loc_nv_id = fields.Many2one(
+        'phong_ban',
+        string='Lọc NV theo phòng ban',
+        help='Chọn phòng ban để thu hẹp danh sách nhân viên mượn (để trống = tất cả NV).',
+        ondelete='set null',
+    )
     
     ly_do = fields.Text('Lý do mượn', required=True)
     ghi_chu = fields.Text('Ghi chú')
     
+    # ============ LIÊN KẾT PHIẾU MƯỢN TRẢ (Mức 2 - tự động hóa) ============
+    muon_tra_ids = fields.One2many(
+        'muon_tra_tai_san',
+        'ma_don_muon_id',
+        string='Phiếu mượn trả',
+        readonly=True,
+    )
+
     # ============ DANH SÁCH TÀI SẢN ============
+    phan_bo_chon_ids = fields.Many2many(
+        'phan_bo_tai_san',
+        'don_muon_phan_bo_rel',
+        'don_muon_id',
+        'phan_bo_id',
+        string='Tài sản mượn',
+        help='Chọn tài sản thuộc phòng ban cho mượn. Có thể chọn trước khi Lưu lần đầu.',
+    )
     don_muon_tai_san_ids = fields.One2many(
         'don_muon_tai_san_line', 
         'don_muon_id', 
@@ -120,22 +142,77 @@ class DonMuonTaiSan(models.Model):
             else:
                 record.custom_rec_name = record.ma_don_muon or 'New'
     
-    @api.depends('don_muon_tai_san_ids')
+    @api.depends('don_muon_tai_san_ids', 'phan_bo_chon_ids')
     def _compute_so_tai_san(self):
         for record in self:
-            record.so_tai_san = len(record.don_muon_tai_san_ids)
+            if record.don_muon_tai_san_ids:
+                record.so_tai_san = len(record.don_muon_tai_san_ids)
+            else:
+                record.so_tai_san = len(record.phan_bo_chon_ids)
 
-    @api.depends('phong_ban_cho_muon_id', 'don_muon_tai_san_ids')
+    @api.depends(
+        'phong_ban_cho_muon_id',
+        'don_muon_tai_san_ids', 'don_muon_tai_san_ids.phan_bo_tai_san_id',
+        'phan_bo_chon_ids',
+    )
     def _compute_ds_tai_san_chua_muon(self):
         for record in self:
-            da_muon_ids = record.don_muon_tai_san_ids.mapped('phan_bo_tai_san_id').ids
-            # Tìm tài sản thuộc phòng ban cho mượn và chưa được mượn
-            ds_tai_san = self.env['phan_bo_tai_san'].search([
-                ('phong_ban_id', '=', record.phong_ban_cho_muon_id.id if record.phong_ban_cho_muon_id else False),
-                ('id', 'not in', da_muon_ids)
+            selected_ids = (
+                record.don_muon_tai_san_ids.mapped('phan_bo_tai_san_id')
+                | record.phan_bo_chon_ids
+            ).ids
+            pb_id = record.phong_ban_cho_muon_id.id if record.phong_ban_cho_muon_id else False
+            # Chỉ loại TS đang mượn/hỏng/mất; NV "sử dụng" trên phân bổ ≠ đang mượn tạm
+            available = self.env['phan_bo_tai_san'].search([
+                ('phong_ban_id', '=', pb_id),
+                ('trang_thai', '=', 'in-use'),
+                ('tinh_trang', 'in', ['binh_thuong']),
             ])
-            record.ds_tai_san_chua_muon = ds_tai_san
-    
+            # Giữ TS đã chọn trong danh sách để domain không xóa dòng sau khi Lưu
+            if selected_ids:
+                selected = self.env['phan_bo_tai_san'].browse(selected_ids)
+                record.ds_tai_san_chua_muon = available | selected
+            else:
+                record.ds_tai_san_chua_muon = available
+
+    @api.onchange('phong_ban_cho_muon_id')
+    def _onchange_phong_ban_cho_muon_id(self):
+        """Đổi phòng ban cho mượn → xóa TS không thuộc phòng mới (NV mượn giữ nguyên — có thể khác phòng)."""
+        if self.phong_ban_cho_muon_id and self.phan_bo_chon_ids:
+            invalid_pb = self.phan_bo_chon_ids.filtered(
+                lambda p: p.phong_ban_id != self.phong_ban_cho_muon_id
+            )
+            if invalid_pb:
+                self.phan_bo_chon_ids = self.phan_bo_chon_ids - invalid_pb
+        if self.phong_ban_cho_muon_id and self.don_muon_tai_san_ids:
+            invalid = self.don_muon_tai_san_ids.filtered(
+                lambda l: l.phan_bo_tai_san_id
+                and l.phan_bo_tai_san_id.phong_ban_id != self.phong_ban_cho_muon_id
+            )
+            if invalid:
+                self.don_muon_tai_san_ids = self.don_muon_tai_san_ids - invalid
+
+    @api.onchange('phong_ban_loc_nv_id')
+    def _onchange_phong_ban_loc_nv_id(self):
+        """Đổi bộ lọc NV → xóa NV không thuộc phòng đã lọc."""
+        if self.phong_ban_loc_nv_id and self.nhan_vien_muon_id \
+                and self.nhan_vien_muon_id.phong_ban_hien_tai_id != self.phong_ban_loc_nv_id:
+            self.nhan_vien_muon_id = False
+
+    @api.constrains('phan_bo_chon_ids', 'phong_ban_cho_muon_id', 'trang_thai')
+    def _constrains_phan_bo_chon(self):
+        for record in self:
+            if record.trang_thai != 'nhap' or not record.phong_ban_cho_muon_id:
+                continue
+            invalid = record.phan_bo_chon_ids.filtered(
+                lambda p: p.phong_ban_id != record.phong_ban_cho_muon_id
+            )
+            if invalid:
+                names = ', '.join(invalid.mapped('tai_san_id.ma_tai_san'))
+                raise ValidationError(_(
+                    'Tài sản %s không thuộc phòng ban cho mượn.'
+                ) % names)
+
     @api.depends('trang_thai', 'thoi_gian_muon', 'thoi_gian_tra')
     def _compute_tinh_trang(self):
         for record in self:
@@ -166,12 +243,31 @@ class DonMuonTaiSan(models.Model):
                 if record.thoi_gian_muon > record.thoi_gian_tra:
                     raise ValidationError("Thời gian mượn phải trước thời gian trả dự kiến!")
     
-    @api.constrains('don_muon_tai_san_ids')
+    @api.constrains('don_muon_tai_san_ids', 'phan_bo_chon_ids', 'trang_thai')
     def _constrains_don_muon_tai_san_ids(self):
         for record in self:
-            if record.trang_thai not in ['nhap', 'cho_duyet'] and not record.don_muon_tai_san_ids:
-                raise ValidationError("Đơn mượn phải có ít nhất một tài sản!")
+            if record.trang_thai not in ['nhap', 'cho_duyet']:
+                if not record.don_muon_tai_san_ids:
+                    raise ValidationError("Đơn mượn phải có ít nhất một tài sản!")
     
+    def _sync_lines_from_phan_bo_chon(self):
+        """Đồng bộ chi tiết dòng từ danh sách tài sản đã chọn."""
+        Line = self.env['don_muon_tai_san_line']
+        for record in self:
+            if record.trang_thai != 'nhap':
+                continue
+            target = record.phan_bo_chon_ids
+            existing = record.don_muon_tai_san_ids
+            (existing.filtered(
+                lambda l: l.phan_bo_tai_san_id not in target
+            )).unlink()
+            current_pb = record.don_muon_tai_san_ids.mapped('phan_bo_tai_san_id')
+            for pb in target - current_pb:
+                Line.create({
+                    'don_muon_id': record.id,
+                    'phan_bo_tai_san_id': pb.id,
+                })
+
     # ============ CRUD METHODS ============
     @api.model
     def create(self, vals):
@@ -180,10 +276,144 @@ class DonMuonTaiSan(models.Model):
             if seq:
                 vals['ma_don_muon'] = seq
             else:
-                # Fallback: timestamp microsecond để đảm bảo unique
                 import time
                 vals['ma_don_muon'] = 'DMT-' + str(int(time.time() * 1000000))
-        return super(DonMuonTaiSan, self).create(vals)
+        record = super(DonMuonTaiSan, self).create(vals)
+        record._sync_lines_from_phan_bo_chon()
+        return record
+
+    def write(self, vals):
+        res = super(DonMuonTaiSan, self).write(vals)
+        if 'phan_bo_chon_ids' in vals or 'phong_ban_cho_muon_id' in vals:
+            self.filtered(lambda r: r.trang_thai == 'nhap')._sync_lines_from_phan_bo_chon()
+        return res
+
+    def unlink(self):
+        blocked = {
+            'cho_duyet': _('Chờ duyệt'),
+            'da_duyet': _('Đã duyệt'),
+            'dang_muon': _('Đang mượn'),
+            'da_tra': _('Đã trả'),
+        }
+        for record in self:
+            if record.trang_thai in blocked:
+                raise UserError(_(
+                    'Không thể xóa đơn ở trạng thái "%s".\n'
+                    'Hãy hủy đơn hoặc hoàn tất trả tài sản trước.'
+                ) % blocked[record.trang_thai])
+            record._cancel_linked_muon_tra(_('Đơn bị xóa'))
+        return super(DonMuonTaiSan, self).unlink()
+
+    def _get_active_muon_tra(self):
+        """Phiếu mượn trả đang xử lý (chưa kết thúc)."""
+        self.ensure_one()
+        # Đơn đã hủy/từ chối/hoàn tất → không còn phiếu đang chặn thao tác
+        if self.trang_thai in ('huy', 'tu_choi', 'da_tra'):
+            return self.env['muon_tra_tai_san']
+        return self.env['muon_tra_tai_san'].search([
+            ('ma_don_muon_id', '=', self.id),
+            ('trang_thai', 'not in', ['tu_choi', 'da_tra']),
+        ], limit=1, order='create_date desc')
+
+    def _map_don_muon_lines_by_phan_bo(self):
+        """Map phan_bo_tai_san_id -> don_muon_tai_san_line."""
+        self.ensure_one()
+        return {
+            line.phan_bo_tai_san_id.id: line
+            for line in self.don_muon_tai_san_ids
+            if line.phan_bo_tai_san_id
+        }
+
+    def sync_from_muon_tra_approved(self, muon_tra):
+        """Đồng bộ trạng thái đã duyệt từ phiếu mượn trả."""
+        self.ensure_one()
+        self.write({
+            'trang_thai': 'da_duyet',
+            'nguoi_duyet_id': muon_tra.nguoi_duyet_id.id,
+            'ngay_duyet': muon_tra.ngay_duyet,
+        })
+
+    def sync_from_muon_tra_rejected(self, muon_tra):
+        """Đồng bộ trạng thái từ chối từ phiếu mượn trả."""
+        self.ensure_one()
+        self.write({
+            'trang_thai': 'tu_choi',
+            'nguoi_duyet_id': muon_tra.nguoi_duyet_id.id,
+            'ngay_duyet': muon_tra.ngay_duyet,
+            'ly_do_tu_choi': muon_tra.ly_do_tu_choi,
+        })
+
+    def sync_from_muon_tra_borrowed(self, muon_tra):
+        """Đồng bộ trạng thái đang mượn từ phiếu mượn trả."""
+        self.ensure_one()
+        now = muon_tra.thoi_gian_muon_thuc_te or fields.Datetime.now()
+        line_map = self._map_don_muon_lines_by_phan_bo()
+        for mt_line in muon_tra.muon_tra_line_ids:
+            dm_line = line_map.get(mt_line.phan_bo_tai_san_id.id)
+            if dm_line:
+                dm_line.write({
+                    'thoi_gian_cho_muon': now,
+                    'nguoi_giao_id': muon_tra.nguoi_giao_id.id,
+                    'trang_thai_line': 'dang_muon',
+                    'tinh_trang_truoc_muon': 'binh_thuong',
+                })
+        self.write({
+            'trang_thai': 'dang_muon',
+            'thoi_gian_muon': now,
+        })
+
+    def sync_from_muon_tra_returned(self, muon_tra):
+        """Đồng bộ trạng thái đã trả từ phiếu mượn trả."""
+        self.ensure_one()
+        now = muon_tra.thoi_gian_tra_thuc_te or fields.Datetime.now()
+        line_map = self._map_don_muon_lines_by_phan_bo()
+        for mt_line in muon_tra.muon_tra_line_ids:
+            dm_line = line_map.get(mt_line.phan_bo_tai_san_id.id)
+            if not dm_line:
+                continue
+            trang_thai_line = 'da_tra'
+            if mt_line.tinh_trang_khi_tra == 'hu_hong':
+                trang_thai_line = 'hong'
+            elif mt_line.tinh_trang_khi_tra == 'mat':
+                trang_thai_line = 'mat'
+            dm_line.write({
+                'tinh_trang_sau_tra': mt_line.tinh_trang_khi_tra,
+                'thoi_gian_tra_thuc_te': now,
+                'nguoi_nhan_tra_id': muon_tra.nguoi_nhan_tra_id.id,
+                'trang_thai_line': trang_thai_line,
+                'ghi_chu_tinh_trang': mt_line.ghi_chu_tra or '',
+            })
+        self.write({
+            'trang_thai': 'da_tra',
+            'ngay_tra_thuc_te': now,
+            'nguoi_xac_nhan_tra_id': muon_tra.nguoi_nhan_tra_id.id,
+        })
+
+    def _get_don_muon_lines_for_submit(self):
+        """Lấy dòng tài sản hợp lệ sau khi đồng bộ từ Many2many."""
+        self.ensure_one()
+        self._sync_lines_from_phan_bo_chon()
+        self.flush()
+        return self.env['don_muon_tai_san_line'].search([
+            ('don_muon_id', '=', self.id),
+            ('phan_bo_tai_san_id', '!=', False),
+        ])
+
+    def _cancel_linked_muon_tra(self, ly_do):
+        """Hủy mọi phiếu mượn trả chưa kết thúc khi đơn bị hủy/reset."""
+        self.ensure_one()
+        linked = self.env['muon_tra_tai_san'].search([
+            ('ma_don_muon_id', '=', self.id),
+            ('trang_thai', 'not in', ['tu_choi', 'da_tra']),
+        ])
+        for phieu in linked:
+            phieu._release_phan_bo_assets()
+            phieu.write({
+                'trang_thai': 'tu_choi',
+                'ly_do_tu_choi': ly_do,
+                'nguoi_duyet_id': self.env.user.id,
+                'ngay_duyet': fields.Datetime.now(),
+            })
     
     # ============ ACTION METHODS ============
     def action_gui_duyet(self):
@@ -195,163 +425,81 @@ class DonMuonTaiSan(models.Model):
             if record.trang_thai != 'nhap':
                 raise UserError(_('Chỉ có thể gửi duyệt đơn ở trạng thái Nháp!'))
 
-            # Lấy lines từ đơn mượn
-            tai_san_lines = self.env['don_muon_tai_san_line'].sudo().search([
-                ('don_muon_id', '=', record.id)
-            ])
+            # Đồng bộ từ danh sách tài sản đã chọn (Many2many — hoạt động cả trước Lưu lần đầu)
+            record._sync_lines_from_phan_bo_chon()
 
-            # Cập nhật trạng thái
+            if not record.phan_bo_chon_ids:
+                raise UserError(_(
+                    'Đơn mượn phải có ít nhất một tài sản!\n\n'
+                    'Quy trình: (1) Chọn Phòng ban cho mượn → (2) Chọn tài sản mượn → '
+                    '(3) Lưu → (4) Gửi duyệt.'
+                ))
+
+            invalid = record.phan_bo_chon_ids.filtered(
+                lambda p: p.phong_ban_id != record.phong_ban_cho_muon_id
+            )
+            if invalid:
+                names = ', '.join(
+                    (p.tai_san_id.ma_tai_san or p.display_name) for p in invalid
+                )
+                raise UserError(_(
+                    'Tài sản %s không thuộc phòng ban cho mượn "%s".\n'
+                    'Chỉ chọn tài sản đang phân bổ cho phòng ban đó.'
+                ) % (names, record.phong_ban_cho_muon_id.ten_phong_ban))
+
+            lines = record._get_don_muon_lines_for_submit()
+            if not lines:
+                raise UserError(_(
+                    'Không tạo được dòng tài sản. Vui lòng Lưu đơn sau khi chọn tài sản rồi thử lại.'
+                ))
+
+            # Dọn phiếu sót (đơn nháp nhưng còn phiếu cũ chưa đóng)
+            stale = self.env['muon_tra_tai_san'].search([
+                ('ma_don_muon_id', '=', record.id),
+                ('trang_thai', 'not in', ['tu_choi', 'da_tra']),
+            ])
+            if stale:
+                record._cancel_linked_muon_tra(
+                    _('Hủy phiếu sót trước khi gửi duyệt lại')
+                )
+
+            existing = record._get_active_muon_tra()
+            if existing:
+                raise UserError(_(
+                    'Đơn mượn đã có phiếu mượn trả đang xử lý: %s'
+                ) % existing.ma_phieu_muon_tra)
+
             record.write({'trang_thai': 'cho_duyet'})
 
-            # Copy lines sang phiếu mượn trả
             muon_tra_lines = []
-            for line in tai_san_lines:
-                if line.phan_bo_tai_san_id and line.phan_bo_tai_san_id.id:
-                    muon_tra_lines.append((0, 0, {
-                        'phan_bo_tai_san_id': line.phan_bo_tai_san_id.id,
-                        'ghi_chu': line.ghi_chu or '',
-                    }))
+            for line in lines:
+                muon_tra_lines.append((0, 0, {
+                    'phan_bo_tai_san_id': line.phan_bo_tai_san_id.id,
+                    'ghi_chu': line.ghi_chu or '',
+                }))
 
-            # Tạo phiếu mượn trả
-            create_vals = {
+            muon_tra = self.env['muon_tra_tai_san'].create({
                 'ma_don_muon_id': record.id,
-                'ten_phieu_muon_tra': f"Duyệt đơn mượn {record.ma_don_muon}",
+                'ten_phieu_muon_tra': _('Duyệt đơn mượn %s') % record.ma_don_muon,
                 'phong_ban_cho_muon_id': record.phong_ban_cho_muon_id.id,
                 'nhan_vien_muon_id': record.nhan_vien_muon_id.id,
                 'thoi_gian_muon': record.thoi_gian_muon,
                 'thoi_gian_tra_du_kien': record.thoi_gian_tra,
                 'ly_do_muon': record.ly_do or '',
                 'trang_thai': 'cho_duyet',
-            }
-
-            # Tạo phiếu trước (không có lines)
-            muon_tra = self.env['muon_tra_tai_san'].sudo().create(create_vals)
-
-            # Thêm lines sau khi tạo phiếu (tránh circular dependency)
-            if muon_tra_lines:
-                muon_tra.sudo().write({'muon_tra_line_ids': muon_tra_lines})
+                'muon_tra_line_ids': muon_tra_lines,
+            })
 
             record.message_post(
                 body=_('📤 Đơn mượn đã gửi phê duyệt. Mã phiếu: %s') % muon_tra.ma_phieu_muon_tra
             )
-
-            record.message_post(
-                body=_('📤 Đơn mượn đã được gửi để phê duyệt. Mã phiếu: %s') % muon_tra.ma_phieu_muon_tra
-            )
-    
-    def action_duyet(self):
-        """Duyệt đơn mượn"""
-        for record in self:
-            if record.trang_thai != 'cho_duyet':
-                raise UserError(_('Chỉ có thể duyệt đơn đang chờ duyệt!'))
-            record.write({
-                'trang_thai': 'da_duyet',
-                'nguoi_duyet_id': self.env.user.id,
-                'ngay_duyet': fields.Datetime.now(),
-            })
-            record.message_post(body=_('✅ Đơn mượn đã được duyệt bởi %s.') % self.env.user.name)
-    
-    def action_tu_choi(self):
-        """Từ chối đơn mượn"""
-        for record in self:
-            if record.trang_thai != 'cho_duyet':
-                raise UserError(_('Chỉ có thể từ chối đơn đang chờ duyệt!'))
-            # Mở wizard yêu cầu nhập lý do
-            return {
-                'name': 'Lý do từ chối',
-                'type': 'ir.actions.act_window',
-                'res_model': 'don_muon_tu_choi_wizard',
-                'view_mode': 'form',
-                'target': 'new',
-                'context': {'default_don_muon_id': record.id}
-            }
-    
-    def action_xac_nhan_tu_choi(self, ly_do):
-        """Xác nhận từ chối với lý do"""
-        for record in self:
-            record.write({
-                'trang_thai': 'tu_choi',
-                'nguoi_duyet_id': self.env.user.id,
-                'ngay_duyet': fields.Datetime.now(),
-                'ly_do_tu_choi': ly_do,
-            })
-            record.message_post(body=_('❌ Đơn mượn đã bị từ chối. Lý do: %s') % ly_do)
-    
-    def action_xac_nhan_muon(self):
-        """Xác nhận đã cho mượn tài sản"""
-        for record in self:
-            if record.trang_thai != 'da_duyet':
-                raise UserError(_('Chỉ có thể xác nhận mượn cho đơn đã duyệt!'))
-            
-            now = fields.Datetime.now()
-            record.write({
-                'trang_thai': 'dang_muon',
-                'thoi_gian_muon': now,
-            })
-            
-            # Cập nhật trạng thái từng tài sản và ghi nhận thời gian, người giao
-            for line in record.don_muon_tai_san_ids:
-                if line.phan_bo_tai_san_id:
-                    line.phan_bo_tai_san_id.write({'tinh_trang': 'dang_muon'})
-                    line.write({
-                        'thoi_gian_cho_muon': now,
-                        'nguoi_giao_id': self.env.user.id,
-                        'trang_thai_line': 'dang_muon',
-                    })
-            
-            record.message_post(body=_('📦 Tài sản đã được cho mượn lúc %s bởi %s.') % (
-                now.strftime('%d/%m/%Y %H:%M'), self.env.user.name))
-    
-    def action_xac_nhan_tra(self):
-        """Mở wizard xác nhận trả tài sản với tình trạng"""
-        self.ensure_one()
-        if self.trang_thai != 'dang_muon':
-            raise UserError(_('Chỉ có thể xác nhận trả cho đơn đang mượn!'))
-        
-        return {
-            'name': 'Xác nhận trả tài sản',
-            'type': 'ir.actions.act_window',
-            'res_model': 'xac_nhan_tra_wizard',
-            'view_mode': 'form',
-            'target': 'new',
-            'context': {'default_don_muon_id': self.id}
-        }
-    
-    def action_xac_nhan_tra_hoan_tat(self):
-        """Hoàn tất xác nhận trả tài sản (được gọi từ wizard)"""
-        for record in self:
-            now = fields.Datetime.now()
-            record.write({
-                'trang_thai': 'da_tra',
-                'ngay_tra_thuc_te': now,
-                'nguoi_xac_nhan_tra_id': self.env.user.id,
-            })
-            
-            # Cập nhật trạng thái từng tài sản
-            for line in record.don_muon_tai_san_ids:
-                if line.phan_bo_tai_san_id:
-                    # Cập nhật tình trạng phan_bo dựa trên tình trạng sau trả
-                    tinh_trang_moi = 'binh_thuong'
-                    if line.tinh_trang_sau_tra == 'hu_hong':
-                        tinh_trang_moi = 'hu_hong'
-                    elif line.tinh_trang_sau_tra == 'mat':
-                        tinh_trang_moi = 'mat'
-                    
-                    line.phan_bo_tai_san_id.write({'tinh_trang': tinh_trang_moi})
-                    line.write({
-                        'thoi_gian_tra_thuc_te': now,
-                        'nguoi_nhan_tra_id': self.env.user.id,
-                        'trang_thai_line': 'da_tra' if line.tinh_trang_sau_tra not in ['mat', 'hu_hong'] else ('mat' if line.tinh_trang_sau_tra == 'mat' else 'hong'),
-                    })
-            
-            record.message_post(body=_('✅ Tài sản đã được trả lúc %s. Người nhận: %s.') % (
-                now.strftime('%d/%m/%Y %H:%M'), self.env.user.name))
     
     def action_huy(self):
         """Hủy đơn mượn"""
         for record in self:
             if record.trang_thai in ['dang_muon', 'da_tra']:
                 raise UserError(_('Không thể hủy đơn đang mượn hoặc đã trả!'))
+            record._cancel_linked_muon_tra(_('Đơn mượn đã bị hủy'))
             record.write({'trang_thai': 'huy'})
             record.message_post(body=_('🚫 Đơn mượn đã bị hủy.'))
     
@@ -360,6 +508,7 @@ class DonMuonTaiSan(models.Model):
         for record in self:
             if record.trang_thai not in ['tu_choi', 'huy']:
                 raise UserError(_('Chỉ có thể đặt lại đơn bị từ chối hoặc đã hủy!'))
+            record._cancel_linked_muon_tra(_('Đơn được đặt lại nháp'))
             record.write({
                 'trang_thai': 'nhap',
                 'nguoi_duyet_id': False,

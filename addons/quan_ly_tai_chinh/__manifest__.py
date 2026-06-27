@@ -24,10 +24,11 @@
 
     # always loaded
     'data': [
+        'security/groups.xml',
         'security/ir.model.access.csv',
         'data/sequence.xml',
+        'data/account_setup_minimal.xml',
         'views/dashboard_tai_chinh_views.xml',
-        'data/tai_chinh_demo.xml',  # ← THÊM vào đây để luôn load
         'views/khau_hao_tai_san_views.xml',
         'views/but_toan_views.xml',
         'views/tai_khoan_quan_tri_views.xml',
@@ -38,6 +39,9 @@
         'views/wizard_sao_chep_views.xml',
         'report/bao_cao_tai_chinh_report.xml',
         'views/menu.xml',  # PHẢI LOAD CUỐI CÙNG sau khi tất cả actions đã được định nghĩa
+    ],
+    'demo': [
+        'data/tai_chinh_demo.xml',
     ],
     'assets': {
         'web.assets_backend': [

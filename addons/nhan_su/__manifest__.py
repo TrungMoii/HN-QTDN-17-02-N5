@@ -25,7 +25,6 @@
     # always loaded
     'data': [
         'security/ir.model.access.csv',
-        'data/qlns_demo.xml',
         'views/nhan_vien.xml',
          'views/phong_ban.xml',
          'views/chuc_vu.xml',
@@ -40,9 +39,9 @@
         ],
     },
     
-    # only loaded in demonstration mode
+    # Dữ liệu mẫu — chỉ load khi tạo DB có tick "Demo data"
     'demo': [
-        'demo/demo.xml',
+        'data/qlns_demo.xml',
     ],
     'installable': True,
     'application': True,

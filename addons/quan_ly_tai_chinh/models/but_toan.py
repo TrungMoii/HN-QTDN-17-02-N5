@@ -12,8 +12,8 @@ class ButToan(models.Model):
     ngay_but_toan = fields.Date('Ngày bút toán', required=True, default=fields.Date.today)
     mo_ta = fields.Text('Mô tả')
     khau_hao_id = fields.Many2one('khau_hao_tai_san', string='Khấu hao tài sản', ondelete='cascade')
-    tai_khoan_no_id = fields.Many2one('account.account', string='Tài khoản nợ', required=True)
-    tai_khoan_co_id = fields.Many2one('account.account', string='Tài khoản có', required=True)
+    tai_khoan_no_id = fields.Many2one('account.account', string='Tài khoản nợ', required=True, ondelete='cascade')
+    tai_khoan_co_id = fields.Many2one('account.account', string='Tài khoản có', required=True, ondelete='cascade')
     so_tien = fields.Float('Số tiền', required=True)
     trang_thai = fields.Selection([
         ('draft', 'Dự thảo'),

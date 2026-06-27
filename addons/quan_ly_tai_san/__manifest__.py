@@ -26,7 +26,8 @@
     'data': [
         'security/ir.model.access.csv',
         'data/sequence.xml',
-        'data/tai_san_demo.xml',  # ← THÊM vào đây để luôn load
+        'data/cron_muon_tra.xml',
+        'data/tai_san_demo.xml',
         'views/danh_muc_tai_san.xml',
         'views/kiem_ke_tai_san.xml',
         'views/lich_su_khau_hao.xml',
@@ -44,10 +45,6 @@
         'wizard/muon_tra_wizard_views.xml',
         
     ],
-    # only loaded in demonstration mode
-    # 'demo': [
-    #     'demo/demo.xml',
-    # ],
     
     'assets': {
         'web.assets_common': [  # THAY ĐỔI: Dùng assets_common thay vì backend

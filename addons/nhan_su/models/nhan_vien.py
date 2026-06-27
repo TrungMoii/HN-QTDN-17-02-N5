@@ -81,20 +81,46 @@ class NhanVien(models.Model):
     )
     def _compute_phong_ban_chuc_vu_hien_tai(self):
         """
-        Compute phòng ban và chức vụ hiện tại dựa trên lịch sử công tác.
-        Lấy bản ghi lịch sử công tác có time_start lớn nhất (mới nhất).
+        Compute phòng ban và chức vụ hiện tại từ lịch sử công tác đang hiệu lực.
+        Ưu tiên bản ghi có time_start <= hôm nay và time_end >= hôm nay (hoặc chưa kết thúc).
         """
+        today = fields.Date.context_today(self)
         for record in self:
-            if record.lich_su_cong_tac_ids:
-                # Sắp xếp theo time_start giảm dần, lấy bản ghi mới nhất
-                latest = record.lich_su_cong_tac_ids.sorted(
-                    key=lambda r: r.time_start, reverse=True
+            active_lines = record.lich_su_cong_tac_ids.filtered(
+                lambda r: r.time_start
+                and r.time_start <= today
+                and (not r.time_end or r.time_end >= today)
+            )
+            if active_lines:
+                latest = active_lines.sorted(
+                    key=lambda r: (r.time_start, r.time_end or today),
+                    reverse=True,
                 )[0]
+            elif record.lich_su_cong_tac_ids:
+                latest = record.lich_su_cong_tac_ids.sorted(
+                    key=lambda r: r.time_start or today,
+                    reverse=True,
+                )[0]
+            else:
+                latest = False
+
+            if latest:
                 record.phong_ban_hien_tai_id = latest.phong_ban_id
                 record.chuc_vu_hien_tai_id = latest.chuc_vu_id
             else:
                 record.phong_ban_hien_tai_id = False
                 record.chuc_vu_hien_tai_id = False
+
+    def name_get(self):
+        result = []
+        for record in self:
+            label = f"[{record.ma_dinh_danh}] {record.ho_ten}"
+            if record.phong_ban_hien_tai_id:
+                pb = record.phong_ban_hien_tai_id.ten_phong_ban \
+                    or record.phong_ban_hien_tai_id.ma_phong_ban
+                label = f"{label} — {pb}"
+            result.append((record.id, label))
+        return result
 
     def _hash_password(self, password):
         """Hash mật khẩu sử dụng SHA256"""

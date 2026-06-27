@@ -14,6 +14,7 @@ class TinhToanKhauHaoTuDong(models.Model):
     """
     _name = 'tinh.toan.khau.hao'
     _description = 'Tính toán khấu hao tự động'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'thang_nam'
     _order = 'thang_nam desc'
     

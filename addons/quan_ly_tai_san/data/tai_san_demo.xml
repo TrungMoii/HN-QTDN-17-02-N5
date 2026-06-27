@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data noupdate="0">
+    <data noupdate="1">
     <!-- ==================== DANH MỤC TÀI SẢN MẪU ==================== -->
     <record id="demo_danh_muc_may_tinh" model="danh_muc_tai_san">
         <field name="ma_danh_muc_ts">DM001</field>

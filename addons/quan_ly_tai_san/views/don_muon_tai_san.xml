@@ -12,7 +12,8 @@
                         <!-- Việc duyệt/từ chối/xác nhận cho mượn/trả được thực hiện ở Quản lý mượn trả -->
                         <button name="action_gui_duyet" string="📤 Gửi duyệt" type="object"
                             class="btn-primary"
-                            attrs="{'invisible': [('trang_thai', '!=', 'nhap')]}"/>
+                            attrs="{'invisible': [('trang_thai', '!=', 'nhap')]}"
+                            confirm="Gửi đơn này để phê duyệt? (Cần đã chọn tài sản và Lưu)"/>
                         
                         <button name="action_huy" string="🚫 Hủy đơn" type="object"
                             class="btn-secondary"
@@ -41,9 +42,14 @@
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"/>
                                 <field name="phong_ban_cho_muon_id" 
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap'])]}"/>
-                                <field name="nhan_vien_muon_id"
+                                <field name="phong_ban_loc_nv_id"
+                                    string="Lọc NV theo phòng ban"
+                                    placeholder="Để trống = hiện tất cả NV"
                                     attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"
-                                    domain="[('phong_ban_hien_tai_id', '=', phong_ban_cho_muon_id)]"
+                                    options="{'no_create': True}"/>
+                                <field name="nhan_vien_muon_id"
+                                    domain="[('phong_ban_hien_tai_id', '=?', phong_ban_loc_nv_id)]"
+                                    attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}"
                                     options="{'no_create': True, 'no_open': False}"/>
                             </group>
                             <group string="Thời gian">
@@ -77,25 +83,46 @@
                             <field name="ghi_chu" nolabel="1"/>
                         </group>
 
+                        <div class="alert alert-info mb-0" role="alert"
+                            attrs="{'invisible': [('trang_thai', '!=', 'nhap')]}">
+                            <p class="mb-1"><strong>Quy trình nhanh:</strong> Chọn phòng ban → chọn tài sản → <strong>Lưu</strong> → Gửi duyệt.</p>
+                            <p class="mb-1"><strong>Phòng ban cho mượn</strong> = phòng quản lý tài sản. Danh sách tài sản bên dưới <strong>tự lọc</strong> theo phòng ban này.</p>
+                            <p class="mb-0"><strong>Nhân viên mượn</strong> có thể khác phòng (TC-03: NV Kinh doanh mượn TS Kế toán).</p>
+                        </div>
+
                         <notebook>
                             <page string="Danh sách tài sản mượn" name="tai_san">
-                                <field name="don_muon_tai_san_ids" 
-                                    attrs="{'readonly': [('trang_thai', 'not in', ['nhap', 'cho_duyet'])]}">
-                                    <tree editable="bottom" no_open="1">
-                                        <field name="phan_bo_tai_san_id" 
-                                            string="Tài sản"
-                                            domain="[('id','in',parent.ds_tai_san_chua_muon)]"
-                                            options="{'no_open': True, 'no_create': True}"/>
-                                        <field name="tinh_trang_truoc_muon" 
-                                            string="TT trước mượn"/>
-                                        <field name="ghi_chu" string="Ghi chú"/>
-                                        <field name="trang_thai_line" widget="badge"
-                                            decoration-info="trang_thai_line == 'cho_muon'"
-                                            decoration-warning="trang_thai_line == 'dang_muon'"
-                                            decoration-success="trang_thai_line == 'da_tra'"
-                                            decoration-danger="trang_thai_line in ['hong', 'mat']"/>
-                                    </tree>
-                                </field>
+                                <group string="Chọn tài sản"
+                                    attrs="{'invisible': [('phong_ban_cho_muon_id', '=', False)]}">
+                                    <field name="phan_bo_chon_ids"
+                                        nolabel="1"
+                                        force_save="1"
+                                        widget="many2many_tags"
+                                        domain="[
+                                            ('phong_ban_id', '=', phong_ban_cho_muon_id),
+                                            ('trang_thai', '=', 'in-use'),
+                                            ('tinh_trang', '=', 'binh_thuong')
+                                        ]"
+                                        options="{'no_create': True, 'no_open': True}"
+                                        placeholder="Gõ mã TS (vd: TS003) hoặc chọn từ danh sách đã lọc..."
+                                        attrs="{'readonly': [('trang_thai', '!=', 'nhap')]}"/>
+                                </group>
+                                <group attrs="{'invisible': [('phong_ban_cho_muon_id', '=', False)]}">
+                                    <field name="don_muon_tai_san_ids" readonly="1" nolabel="1"
+                                        attrs="{'invisible': [('don_muon_tai_san_ids', '=', [])]}">
+                                        <tree create="0" edit="0" delete="0" no_open="1">
+                                            <field name="phan_bo_tai_san_id" string="Tài sản"/>
+                                            <field name="tinh_trang_truoc_muon" string="TT trước mượn"/>
+                                            <field name="trang_thai_line" widget="badge"/>
+                                        </tree>
+                                    </field>
+                                </group>
+                                <p class="text-muted" attrs="{'invisible': [('phong_ban_cho_muon_id', '=', False)]}">
+                                    Chỉ hiện tài sản đang phân bổ cho <strong>Phòng ban cho mượn</strong> đã chọn.
+                                </p>
+                                <p class="text-muted" attrs="{'invisible': [('phong_ban_cho_muon_id', '!=', False)]}">
+                                    Chọn <strong>Phòng ban cho mượn</strong> ở trên để hiện danh sách tài sản.
+                                </p>
                             </page>
                             
                             <page string="Chi tiết mượn/trả" name="chi_tiet" 

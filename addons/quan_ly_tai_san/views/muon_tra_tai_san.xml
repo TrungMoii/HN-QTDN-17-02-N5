@@ -23,7 +23,7 @@
                         
                         <button name="action_xac_nhan_tra" string="✅ Xác nhận đã nhận trả" type="object"
                             class="btn-success"
-                            attrs="{'invisible': [('trang_thai', '!=', 'dang_muon')]}"/>
+                            attrs="{'invisible': [('trang_thai', 'not in', ['dang_muon', 'qua_han'])]}"/>
                         
                         <button name="action_gia_han" string="⏰ Gia hạn" type="object"
                             class="btn-warning"

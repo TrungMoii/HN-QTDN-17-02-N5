@@ -565,16 +565,17 @@ class DashboardTaiChinh(models.TransientModel):
         }
     
     def action_view_but_toan(self):
-        """Xem danh sách bút toán"""
+        """Xem bút toán kế toán từ phê duyệt mua tài sản"""
         phe_duyet_ids = self.env['phe_duyet_mua_tai_san'].search([])
-        but_toan_ids = phe_duyet_ids.mapped('but_toan_id').ids
-        
+        move_ids = phe_duyet_ids.mapped('but_toan_id').ids
+
         return {
             'name': 'Bút toán tài sản',
             'type': 'ir.actions.act_window',
-            'res_model': 'but_toan',
+            'res_model': 'account.move',
             'view_mode': 'tree,form',
-            'domain': [('id', 'in', but_toan_ids)]
+            'domain': [('id', 'in', move_ids)],
+            'context': {'create': False},
         }
     
     def action_refresh(self):

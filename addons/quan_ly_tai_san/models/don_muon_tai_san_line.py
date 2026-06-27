@@ -51,3 +51,23 @@ class DonMuonTaiSanLine(models.Model):
         ('hong', 'Bị hỏng'),
         ('mat', 'Bị mất'),
     ], string='Trạng thái', default='cho_muon')
+
+    @api.constrains('don_muon_id', 'phan_bo_tai_san_id')
+    def _check_phan_bo_line(self):
+        for line in self:
+            if not line.don_muon_id or not line.phan_bo_tai_san_id:
+                continue
+            dup = self.search_count([
+                ('don_muon_id', '=', line.don_muon_id.id),
+                ('phan_bo_tai_san_id', '=', line.phan_bo_tai_san_id.id),
+                ('id', '!=', line.id),
+            ])
+            if dup:
+                raise ValidationError(_('Tài sản này đã có trong đơn mượn!'))
+            pb_don = line.don_muon_id.phong_ban_cho_muon_id
+            if pb_don and line.phan_bo_tai_san_id.phong_ban_id != pb_don:
+                ma = line.phan_bo_tai_san_id.tai_san_id.ma_tai_san or ''
+                raise ValidationError(_(
+                    'Tài sản %s không thuộc phòng ban "%s". '
+                    'Chỉ chọn tài sản đang phân bổ cho phòng ban đó.'
+                ) % (ma, pb_don.ten_phong_ban))
