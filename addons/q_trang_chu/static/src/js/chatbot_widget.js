@@ -2,7 +2,7 @@
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { Component, useState, onMounted, useRef } from "@odoo/owl";
+import { Component, useState, onMounted } from "@odoo/owl";
 
 export class ChatbotWidget extends Component {
     static template = "q_trang_chu.ChatbotWidget";
@@ -24,9 +24,10 @@ export class ChatbotWidget extends Component {
             ],
         });
 
-        this.messagesRef = useRef("messages");
+        this.messagesEl = null; // sẽ set sau khi mounted
 
         onMounted(() => {
+            this.messagesEl = document.querySelector(".o_chatbot_messages");
             this.addWelcomeMessage();
         });
     }
@@ -129,9 +130,8 @@ export class ChatbotWidget extends Component {
 
     scrollToBottom() {
         setTimeout(() => {
-            if (this.messagesRef.el) {
-                this.messagesRef.el.scrollTop = this.messagesRef.el.scrollHeight;
-            }
+            const el = document.querySelector(".o_chatbot_messages");
+            if (el) el.scrollTop = el.scrollHeight;
         }, 100);
     }
 
@@ -167,13 +167,11 @@ export class ChatbotSystray extends Component {
                 "Thống kê tổng quan",
             ],
         });
-
-        this.messagesRef = useRef("messages");
+        // Không dùng useRef — dùng querySelector thay thế
     }
 
     toggleChat() {
         this.state.isOpen = !this.state.isOpen;
-
         if (this.state.isOpen && this.state.messages.length === 0) {
             this.addWelcomeMessage();
         }
@@ -182,7 +180,7 @@ export class ChatbotSystray extends Component {
     addWelcomeMessage() {
         this.state.messages.push({
             id: Date.now(),
-            content: `👋 <strong>Xin chào!</strong><br><br>Tôi là <strong>AI Assistant</strong> - trợ lý thông minh của hệ thống Quản lý Tài sản.<br><br>Tôi có thể giúp bạn:<br>• 📦 Hướng dẫn mượn/trả tài sản<br>• 📅 Kiểm tra lịch trình tài sản<br>• 🔧 Tra cứu thông tin bảo hành<br>• 📋 Giải thích quy trình, quy định<br>• 📊 Cung cấp thống kê nhanh<br><br>❓ Bạn cần hỗ trợ gì hôm nay?`,
+            content: `👋 <strong>Xin chào!</strong><br><br>Tôi là <strong>ARIA</strong> - AI Assistant của hệ thống Quản lý Tài sản.<br><br>Bạn cần hỗ trợ gì?`,
             isUser: false,
             timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         });
@@ -213,22 +211,17 @@ export class ChatbotSystray extends Component {
                 "process_message",
                 [message, this.state.conversationId]
             );
-
             this.state.conversationId = response.conversation_id;
-
             this.state.messages.push({
                 id: Date.now() + 1,
                 content: this.formatMarkdown(response.answer),
                 isUser: false,
                 timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
                 suggestions: response.suggestions || [],
-                actions: response.actions || [],
             });
-
             if (response.suggestions && response.suggestions.length > 0) {
                 this.state.suggestions = response.suggestions;
             }
-
         } catch (error) {
             console.error("Chatbot error:", error);
             this.state.messages.push({
@@ -238,7 +231,6 @@ export class ChatbotSystray extends Component {
                 timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
             });
         }
-
         this.state.isTyping = false;
         this.scrollToBottom();
     }
@@ -261,9 +253,8 @@ export class ChatbotSystray extends Component {
 
     scrollToBottom() {
         setTimeout(() => {
-            if (this.messagesRef.el) {
-                this.messagesRef.el.scrollTop = this.messagesRef.el.scrollHeight;
-            }
+            const el = document.querySelector(".o_chatbot_systray_container .o_chatbot_messages");
+            if (el) el.scrollTop = el.scrollHeight;
         }, 100);
     }
 
@@ -272,7 +263,6 @@ export class ChatbotSystray extends Component {
         return text
             .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
             .replace(/\*(.*?)\*/g, "<em>$1</em>")
-            .replace(/^\• /gm, "• ")
             .replace(/\n/g, "<br>");
     }
 }

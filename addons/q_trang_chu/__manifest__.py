@@ -51,12 +51,14 @@
             'q_trang_chu/static/src/css/dashboard.css',
             'q_trang_chu/static/src/css/chatbot.css',
             'q_trang_chu/static/src/css/chatbot_page.css',
-            # JS - một widget chatbot duy nhất + trang chatbot đầy đủ
+            # ✅ Floating bubble chatbot - vanilla JS, không dùng OWL registry
+            'q_trang_chu/static/src/js/chatbot_bubble.js',
+            # Dashboard JS
             'q_trang_chu/static/src/js/dashboard.js',
+            # OWL components
             'q_trang_chu/static/src/js/chatbot_widget.js',
             'q_trang_chu/static/src/js/chatbot_page.js',
-        ],
-        'web.assets_qweb': [
+            # OWL XML Templates
             'q_trang_chu/static/src/xml/dashboard_templates.xml',
             'q_trang_chu/static/src/xml/chatbot_templates.xml',
             'q_trang_chu/static/src/xml/chatbot_page.xml',

@@ -223,25 +223,28 @@
             <field name="name">chatbot.conversation.form</field>
             <field name="model">chatbot.conversation</field>
             <field name="arch" type="xml">
-                <form string="Cuộc hội thoại">
+                <form string="AI Chatbot - Hội thoại">
                     <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" placeholder="Tiêu đề hội thoại..."/>
+                            </h1>
+                        </div>
                         <group>
-                            <field name="name"/>
-                            <field name="user_id"/>
-                            <field name="create_date"/>
+                            <group>
+                                <field name="user_id" readonly="1"/>
+                                <field name="create_date" string="Bắt đầu lúc" readonly="1"/>
+                            </group>
                         </group>
-                        <notebook>
-                            <page string="Tin nhắn" name="messages">
-                                <field name="message_ids">
-                                    <tree>
-                                        <field name="timestamp"/>
-                                        <field name="is_user"/>
-                                        <field name="content"/>
-                                        <field name="intent"/>
-                                    </tree>
-                                </field>
-                            </page>
-                        </notebook>
+                        <separator string="💬 Tin nhắn"/>
+                        <field name="message_ids" nolabel="1">
+                            <tree decoration-info="is_user == False" decoration-muted="is_user == True">
+                                <field name="timestamp" string="Thời gian"/>
+                                <field name="is_user" string="Người dùng?" widget="boolean_toggle"/>
+                                <field name="content" string="Nội dung"/>
+                                <field name="intent" string="Intent" optional="hide"/>
+                            </tree>
+                        </field>
                     </sheet>
                 </form>
             </field>
@@ -253,10 +256,22 @@
             <field name="view_mode">tree,form</field>
         </record>
 
-        <!-- ========== CHATBOT PAGE CLIENT ACTION ========== -->
-        <record id="action_chatbot_page" model="ir.actions.client">
+        <!-- ========== CHATBOT PAGE ACTION ========== -->
+        <!-- Dùng act_window thay vì client action để tránh phụ thuộc JS registry -->
+        <record id="action_chatbot_page" model="ir.actions.act_window">
             <field name="name">AI Chatbot</field>
-            <field name="tag">q_trang_chu.chatbot_page</field>
+            <field name="res_model">chatbot.conversation</field>
+            <field name="view_mode">form</field>
+            <field name="target">current</field>
+            <field name="context">{'create': True}</field>
+        </record>
+
+        <!-- ========== CHATBOT ASSISTANT ACTION ========== -->
+        <record id="action_chatbot_assistant" model="ir.actions.act_window">
+            <field name="name">Cấu hình AI Chatbot</field>
+            <field name="res_model">chatbot.assistant</field>
+            <field name="view_mode">form,tree</field>
+            <field name="view_id" ref="view_chatbot_assistant_form"/>
         </record>
 
     </data>

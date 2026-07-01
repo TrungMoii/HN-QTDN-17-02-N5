@@ -4,11 +4,7 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { Component, useState, onMounted } from "@odoo/owl";
 
-const actionRegistry = registry.category("actions");
-
-/**
- * AI Chatbot - Full Screen Chat Interface
- */
+// ─── ChatbotPage: Trang chatbot full-screen ───────────────────────
 class ChatbotPage extends Component {
     setup() {
         this.orm = useService("orm");
@@ -25,203 +21,147 @@ class ChatbotPage extends Component {
         });
 
         this.welcomeOptions = [
-            { icon: "📦", label: "Mượn tài sản", query: "Làm sao để mượn tài sản?", desc: "Hướng dẫn quy trình mượn trả" },
-            { icon: "📅", label: "Kiểm tra lịch", query: "Tôi có thể mượn xe công ty ngày mai không?", desc: "Xem tài sản có sẵn" },
-            { icon: "🔧", label: "Bảo hành", query: "Laptop của tôi còn bảo hành bao lâu?", desc: "Tra cứu thông tin bảo hành" },
-            { icon: "📋", label: "Quy trình", query: "Quy trình thanh lý tài sản cũ như thế nào?", desc: "Giải thích các chính sách" },
+            { icon: "📦", label: "Mượn tài sản",  query: "Làm sao để mượn tài sản?" },
+            { icon: "📅", label: "Kiểm tra lịch", query: "Tôi có thể mượn tài sản ngày mai không?" },
+            { icon: "🔧", label: "Bảo hành",       query: "Tài sản của tôi còn bảo hành không?" },
+            { icon: "📋", label: "Quy trình",      query: "Quy trình thanh lý tài sản như thế nào?" },
         ];
 
         onMounted(() => {
-            this.loadConversations();
-            this.addWelcomeMessage();
+            this._loadConversations();
+            this._addWelcomeMessage();
         });
     }
 
-    async loadConversations() {
-        try {
-            const conversations = await this.orm.searchRead(
-                "chatbot.conversation",
-                [["user_id", "=", this.user.userId]],
-                ["id", "name", "create_date", "write_date"],
-                { limit: 20, order: "write_date desc" }
-            );
-            this.state.conversations = conversations;
-        } catch (error) {
-            console.error("Error loading conversations:", error);
-        }
-    }
-
-    addWelcomeMessage() {
-        const userName = this.user.name || "bạn";
+    _addWelcomeMessage() {
+        var userName = (this.user && this.user.name) || "bạn";
         this.state.messages.push({
-            id: `welcome_${Date.now()}`,
-            content: `Xin chào <strong>${userName}</strong>! 👋<br><br>Tôi là <strong>AI Assistant</strong> - trợ lý thông minh có thể giúp bạn:<br>• Hướng dẫn mượn/trả tài sản<br>• Kiểm tra lịch tài sản<br>• Tra cứu thông tin bảo hành<br>• Giải thích quy trình, quy định<br><br>Bạn cần hỗ trợ gì?`,
+            id: "welcome_" + Date.now(),
+            content: "Xin chào <strong>" + userName + "</strong>! 👋<br><br>Tôi là <strong>ARIA</strong> — AI Assistant của hệ thống.<br><br>Bạn cần hỗ trợ gì?",
             isUser: false,
-            timestamp: this.formatTime(new Date()),
+            timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
             showOptions: true,
         });
     }
 
-    async sendMessage(overrideMessage = null) {
-        const message = overrideMessage || this.state.inputValue.trim();
-        if (!message || this.state.isTyping) return;
-
-        this.state.inputValue = "";
-
-        this.state.messages.push({
-            id: `user_${Date.now()}`,
-            content: this.escapeHtml(message),
-            isUser: true,
-            timestamp: this.formatTime(new Date()),
-        });
-        this.scrollToBottom();
-
-        this.state.isTyping = true;
-
+    async _loadConversations() {
         try {
-            const response = await this.orm.call(
-                "chatbot.assistant",
-                "process_message",
-                [message, this.state.currentConversationId]
+            var convs = await this.orm.searchRead(
+                "chatbot.conversation",
+                [["user_id", "=", this.user.userId]],
+                ["id", "name", "write_date"],
+                { limit: 20, order: "write_date desc" }
             );
-
-            this.state.currentConversationId = response.conversation_id;
-
-            this.state.messages.push({
-                id: `bot_${Date.now()}`,
-                content: this.formatMarkdown(response.answer),
-                isUser: false,
-                timestamp: this.formatTime(new Date()),
-                suggestions: response.suggestions || [],
-                actions: response.actions || [],
-            });
-
-            this.loadConversations();
-
-        } catch (error) {
-            console.error("Chatbot error:", error);
-            this.state.messages.push({
-                id: `error_${Date.now()}`,
-                content: "❌ Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.",
-                isUser: false,
-                timestamp: this.formatTime(new Date()),
-            });
-        } finally {
-            this.state.isTyping = false;
-            this.scrollToBottom();
+            this.state.conversations = convs;
+        } catch (e) {
+            console.warn("Could not load conversations:", e);
         }
     }
 
-    sendQuickOption(option) {
-        this.sendMessage(option.query);
-    }
-
-    sendSuggestion(text) {
-        this.sendMessage(text);
-    }
-
-    handleAction(action) {
-        if (action.type === "link" && action.action) {
-            try {
-                this.action.doAction(action.action);
-            } catch (e) {
-                console.error("Action error:", e);
-            }
-        }
+    async startNewConversation() {
+        this.state.currentConversationId = null;
+        this.state.messages = [];
+        this._addWelcomeMessage();
     }
 
     async loadConversation(conv) {
-        this.state.currentConversationId = conv.id;
-        this.state.messages = [];
-
         try {
-            const messages = await this.orm.searchRead(
+            this.state.currentConversationId = conv.id;
+            this.state.messages = [];
+            var msgs = await this.orm.searchRead(
                 "chatbot.message",
                 [["conversation_id", "=", conv.id]],
-                ["id", "content", "is_user", "create_date"],
+                ["id", "content", "is_user", "timestamp"],
                 { order: "create_date asc" }
             );
-
-            this.state.messages = messages.map(msg => ({
-                id: msg.id,
-                content: this.formatMarkdown(msg.content),
-                isUser: msg.is_user,
-                timestamp: this.formatTime(new Date(msg.create_date)),
-            }));
-
-            this.scrollToBottom();
-        } catch (error) {
-            console.error("Error loading conversation:", error);
-        }
-    }
-
-    startNewConversation() {
-        this.state.messages = [];
-        this.state.currentConversationId = null;
-        this.addWelcomeMessage();
-    }
-
-    toggleSidebar() {
-        this.state.showSidebar = !this.state.showSidebar;
-    }
-
-    handleInput(event) {
-        this.state.inputValue = event.target.value;
-    }
-
-    handleKeyPress(event) {
-        if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            this.sendMessage();
-        }
-    }
-
-    scrollToBottom() {
-        setTimeout(() => {
-            const el = document.querySelector(".o_chat_messages");
-            if (el) {
-                el.scrollTop = el.scrollHeight;
+            for (var m of msgs) {
+                this.state.messages.push({
+                    id: m.id,
+                    content: m.is_user ? this._escape(m.content) : this._format(m.content),
+                    isUser: m.is_user,
+                    timestamp: m.timestamp ? new Date(m.timestamp).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "",
+                });
             }
-        }, 100);
+            this._scrollDown();
+        } catch (e) {
+            console.warn("Could not load conversation:", e);
+        }
     }
 
-    formatTime(date) {
-        return date.toLocaleTimeString("vi-VN", {
-            hour: "2-digit",
-            minute: "2-digit"
+    async sendMessage(override) {
+        var message = override || this.state.inputValue.trim();
+        if (!message || this.state.isTyping) return;
+
+        this.state.inputValue = "";
+        this.state.messages.push({
+            id: "u_" + Date.now(),
+            content: this._escape(message),
+            isUser: true,
+            timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         });
+        this._scrollDown();
+        this.state.isTyping = true;
+
+        try {
+            var res = await this.orm.call("chatbot.assistant", "process_message", [message, this.state.currentConversationId]);
+            this.state.currentConversationId = res.conversation_id;
+            this.state.messages.push({
+                id: "b_" + Date.now(),
+                content: this._format(res.answer),
+                isUser: false,
+                timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+                suggestions: res.suggestions || [],
+                actions: res.actions || [],
+            });
+            await this._loadConversations();
+        } catch (e) {
+            console.error("Chatbot error:", e);
+            this.state.messages.push({
+                id: "e_" + Date.now(),
+                content: "⚠️ Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.",
+                isUser: false,
+                timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+            });
+        }
+        this.state.isTyping = false;
+        this._scrollDown();
     }
 
-    formatDate(dateStr) {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString("vi-VN", {
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit"
-        });
+    sendQuickOption(opt) { this.sendMessage(opt.query); }
+    sendSuggestion(sug)  { this.sendMessage(sug); }
+
+    handleInput(ev)     { this.state.inputValue = ev.target.value; }
+    handleKeyPress(ev)  { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); this.sendMessage(); } }
+    handleAction(act)   { if (act && act.action) { this.action.doAction(act.action); } }
+    toggleSidebar()     { this.state.showSidebar = !this.state.showSidebar; }
+
+    _scrollDown() {
+        setTimeout(function() {
+            var el = document.querySelector(".o_chat_messages");
+            if (el) el.scrollTop = el.scrollHeight;
+        }, 60);
     }
 
-    formatMarkdown(text) {
-        if (!text) return "";
-        return text
-            .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-            .replace(/\*(.*?)\*/g, "<em>$1</em>")
-            .replace(/`([^`]+)`/g, "<code>$1</code>")
+    _escape(t) {
+        return String(t || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    _format(t) {
+        return String(t || "")
+            .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
             .replace(/\n/g, "<br>");
     }
 
-    escapeHtml(text) {
-        const div = document.createElement("div");
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    get userName() {
-        return this.user.name || "bạn";
+    formatDate(d) {
+        if (!d) return "";
+        return new Date(d).toLocaleDateString("vi-VN");
     }
 }
 
 ChatbotPage.template = "q_trang_chu.ChatbotPage";
 
-actionRegistry.add("q_trang_chu.chatbot_page", ChatbotPage);
+// ─── ĐĂNG KÝ VÀO REGISTRY ────────────────────────────────────────
+registry.category("actions").add("q_trang_chu.chatbot_page", ChatbotPage);

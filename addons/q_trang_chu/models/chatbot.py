@@ -15,6 +15,11 @@ _logger = logging.getLogger(__name__)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
+# Groq API Configuration
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
 
 class ChatbotConversation(models.Model):
     """Lưu trữ cuộc hội thoại với chatbot"""
@@ -70,44 +75,120 @@ class ChatbotAssistant(models.Model):
     max_tokens = fields.Integer('Max Tokens', default=1000)
 
     def _get_system_prompt(self):
-        """Tạo system prompt cho Gemini"""
+        """System prompt cho Moi Moi — trợ lý AI toàn năng"""
         today = fields.Date.today().strftime('%d/%m/%Y')
-        return f"""Bạn là AI Assistant - trợ lý thông minh 24/7 của hệ thống Quản lý Tài sản và Tài chính.
+        try:
+            total_ts = self.env['tai_san'].search_count([])
+            don_cho_duyet = self.env['don_muon_tai_san'].search_count([('trang_thai', '=', 'cho_duyet')])
+            dang_muon = self.env['muon_tra_tai_san'].search_count([('trang_thai', '=', 'dang_muon')])
+            tong_nv = self.env['nhan_vien'].search_count([])
+        except Exception:
+            total_ts = don_cho_duyet = dang_muon = tong_nv = 0
+
+        return f"""Bạn là Moi Moi — trợ lý AI thân thiện, thông minh và hữu ích.
 Ngày hôm nay: {today}
 
-🎯 **Nhiệm vụ chính:**
-1. Hướng dẫn người dùng quy trình mượn/trả tài sản step-by-step
-2. Kiểm tra lịch trống của tài sản (dựa vào context từ hệ thống)
-3. Tra cứu thông tin bảo hành tài sản từ database
-4. Giải thích các quy định, chính sách quản lý tài sản
-5. Hỗ trợ các thắc mắc về thanh lý, khấu hao tài sản
+TÍNH CÁCH:
+- Thân thiện, vui vẻ, dễ gần như người bạn thật sự
+- Trả lời mọi câu hỏi không giới hạn chủ đề
+- Ngắn gọn, đúng trọng tâm, dùng emoji cho sinh động
+- Nếu không biết thì thành thật nói và gợi ý cách tìm
 
-📋 **Quy tắc trả lời:**
-- Trả lời ngắn gọn, rõ ràng bằng tiếng Việt
-- Sử dụng emoji phù hợp (📦 🔧 ✅ ❌ 📅 💡 ⚠️)
-- Dùng **bold** và bullet points để dễ đọc
-- Khi hướng dẫn quy trình, liệt kê từng bước rõ ràng
-- Nếu không có thông tin cụ thể, hướng dẫn liên hệ bộ phận phù hợp
-- Luôn thân thiện và chuyên nghiệp
+HỆ THỐNG ERP (Odoo 15) đang quản lý:
+- Tổng tài sản: {total_ts} | Đơn chờ duyệt: {don_cho_duyet} | Đang mượn: {dang_muon} | Nhân viên: {tong_nv}
+- Module Nhân sự: nhân viên, phòng ban, chức vụ, lịch sử công tác
+- Module Tài sản: quản lý, phân bổ, mượn trả, kiểm kê, thanh lý, đề xuất mua
+- Module Tài chính: phê duyệt mua, khấu hao, bút toán, báo cáo
 
-📦 **Quy trình mượn tài sản:**
-1. Vào menu Quản lý Tài sản → Đơn mượn tài sản
-2. Nhấn "Tạo" để tạo đơn mượn mới
-3. Chọn phòng ban cho mượn, nhân viên mượn
-4. Điền thời gian mượn, thời gian trả dự kiến
-5. Thêm tài sản vào danh sách mượn
-6. Nhấn "Lưu" rồi "Gửi duyệt"
-7. Chờ phê duyệt từ quản lý
-8. Nhận tài sản khi được duyệt
-
-🔧 **Module Quản lý Tài sản:** Quản lý danh sách tài sản, phân bổ, mượn trả, kiểm kê, thanh lý
-💰 **Module Quản lý Tài chính:** Đề xuất mua, phê duyệt ngân sách, khấu hao, kế toán
+QUY TẮC:
+- Câu hỏi về hệ thống → hướng dẫn chi tiết từng bước
+- Câu hỏi khác (thời tiết, nấu ăn, code, toán...) → trả lời bình thường
+- Trò chuyện vui → thoải mái, thân thiện
+- LUÔN cố gắng giúp đỡ, không từ chối
 """
+
+    def _call_gemini_api_with_key(self, api_key, message, context=""):
+        """Gọi Groq API trước, fallback sang Gemini nếu lỗi"""
+        import time
+
+        system_prompt = self._get_system_prompt()
+
+        # === THỬ GROQ TRƯỚC ===
+        try:
+            groq_key = GROQ_API_KEY
+            if groq_key:
+                payload = {
+                    "model": GROQ_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt + f"\n\nThông tin hệ thống:\n{context}"},
+                        {"role": "user", "content": message}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 1000,
+                }
+                response = requests.post(
+                    GROQ_API_URL,
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=30
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    return result['choices'][0]['message']['content']
+                else:
+                    _logger.warning(f"Groq error {response.status_code}: {response.text[:200]}")
+        except Exception as e:
+            _logger.warning(f"Groq failed: {e}")
+
+        # === FALLBACK: GEMINI ===
+        try:
+            if not api_key:
+                return None
+            url = f"{GEMINI_API_URL}?key={api_key}"
+            full_prompt = f"{system_prompt}\n\nThông tin hệ thống:\n{context}\n\nCâu hỏi: {message}"
+            payload = {
+                "contents": [{"parts": [{"text": full_prompt}]}],
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1000}
+            }
+            for attempt in range(2):
+                response = requests.post(
+                    url, json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=30
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('candidates'):
+                        return result['candidates'][0]['content']['parts'][0]['text']
+                    return None
+                elif response.status_code == 429:
+                    time.sleep(2)
+                    continue
+                else:
+                    _logger.warning(f"Gemini error {response.status_code}")
+                    return None
+        except Exception as e:
+            _logger.error(f"Gemini failed: {e}")
+
+        return None
 
     def _call_gemini_api(self, message, context=""):
         """Gọi Gemini API để sinh câu trả lời"""
         try:
-            api_key = self.gemini_api_key or GEMINI_API_KEY
+            # Ưu tiên: field trong record → System Parameters → biến môi trường
+            api_key = self.gemini_api_key
+            if not api_key:
+                api_key = self.env['ir.config_parameter'].sudo().get_param(
+                    'mail_bot_gemini.api_key', default=''
+                )
+            if not api_key:
+                api_key = GEMINI_API_KEY
+            if not api_key:
+                _logger.warning("Gemini API key chưa được cấu hình.")
+                return None
             url = f"{GEMINI_API_URL}?key={api_key}"
             
             # Tạo prompt với context
@@ -179,14 +260,32 @@ Hãy trả lời câu hỏi trên một cách hữu ích và thân thiện."""
         # Lấy context từ hệ thống
         context = self._get_system_context(message, intent)
         
-        # Lấy cấu hình chatbot
+        # Lấy hoặc tạo cấu hình chatbot
         assistant = self.search([], limit=1)
-        use_gemini = assistant.use_gemini if assistant else True
-        
-        # Thử gọi Gemini API nếu được bật
+        if not assistant:
+            assistant = self.create({
+                'name': 'Moi Moi Assistant',
+                'active': True,
+                'use_gemini': True,
+            })
+
+        # Đọc API key trực tiếp từ module constant — đảm bảo luôn có key
+        api_key = GEMINI_API_KEY
+        # Nếu có trong System Parameters thì ưu tiên hơn
+        param_key = self.env['ir.config_parameter'].sudo().get_param(
+            'mail_bot_gemini.api_key', default=''
+        )
+        if param_key:
+            api_key = param_key
+
+        use_gemini = bool(api_key)
+
+        # Thử gọi Gemini API
         gemini_response = None
         if use_gemini and assistant:
-            gemini_response = assistant._call_gemini_api(message, context)
+            gemini_response = assistant._call_gemini_api_with_key(
+                api_key, message, context
+            )
         
         if gemini_response:
             response = {

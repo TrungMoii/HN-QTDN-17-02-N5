@@ -59,6 +59,13 @@
             action="action_chatbot_conversation"
             sequence="10"/>
 
+        <menuitem 
+            id="menu_chatbot_config" 
+            name="🔑 Cấu hình AI (API Key)" 
+            parent="menu_chatbot_manage"
+            action="action_chatbot_assistant"
+            sequence="15"/>
+
     </data>
 </odoo>
 
